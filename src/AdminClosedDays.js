@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { fetchClosedDays, supabase } from './api';
+import { fetchClosedDays } from './api';
+import { supabase } from './supabaseClient';
 
 export default function AdminClosedDays({ year, month, darkMode }) {
   const [closedDays, setClosedDays] = useState([]);
@@ -44,21 +45,35 @@ export default function AdminClosedDays({ year, month, darkMode }) {
 
   return (
     <div className={`admin-closed-days${darkMode ? ' dark-mode' : ''}`} style={{ margin: '2rem 0' }}>
-      <h3>Closed Days (Admin)</h3>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-        <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
-        <input type="text" value={reason} onChange={e => setReason(e.target.value)} placeholder="Reason (optional)" />
-        <button onClick={handleAdd} disabled={loading || !newDate}>Add</button>
+      <div className="closed-days-admin">
+        <form className="closed-days-form" onSubmit={e => { e.preventDefault(); handleAdd(); }}>
+          <input
+            type="date"
+            value={newDate}
+            onChange={e => setNewDate(e.target.value)}
+            className="closed-days-input"
+          />
+          <input
+            type="text"
+            placeholder="Reason (optional)"
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            className="closed-days-input"
+          />
+          <button className="closed-days-btn" type="submit" disabled={loading || !newDate}>Add</button>
+        </form>
+        {error && <div className="closed-days-error">{error}</div>}
+        <ul className="closed-days-list">
+          {closedDays.map(day => (
+            <li key={day.id} className="closed-days-item">
+              <div className="closed-days-date">
+                <strong>{day.date}</strong> {day.reason && <span className="closed-days-reason">({day.reason})</span>}
+              </div>
+              <button className="closed-days-delete" onClick={() => handleDelete(day.id)} disabled={loading}>Delete</button>
+            </li>
+          ))}
+        </ul>
       </div>
-      {error && <div style={{ color: '#a00' }}>{error}</div>}
-      <ul>
-        {closedDays.map(day => (
-          <li key={day.id} style={{ marginBottom: 4 }}>
-            {day.date} {day.reason && `- ${day.reason}`}
-            <button style={{ marginLeft: 8 }} onClick={() => handleDelete(day.id)} disabled={loading}>Delete</button>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

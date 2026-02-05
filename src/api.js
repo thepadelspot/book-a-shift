@@ -1,9 +1,26 @@
 import { supabase } from './supabaseClient';
 
+// Fetch all upcoming shifts for a user
+export async function fetchUserShifts(user_id) {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('user_id', user_id)
+    .eq('status', 'booked')
+    .gte('date', today)
+    .order('date', { ascending: true })
+    .order('start_time', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
 // Fetch bookings for a month
+
 export async function fetchBookings(year, month) {
   const fromDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-  const toDate = `${year}-${String(month + 1).padStart(2, '0')}-31`;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const toDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   const { data, error } = await supabase
     .from('bookings')
     .select('*')
@@ -14,9 +31,11 @@ export async function fetchBookings(year, month) {
 }
 
 // Fetch closed days for a month
+
 export async function fetchClosedDays(year, month) {
   const fromDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-  const toDate = `${year}-${String(month + 1).padStart(2, '0')}-31`;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const toDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   const { data, error } = await supabase
     .from('closed_days')
     .select('*')

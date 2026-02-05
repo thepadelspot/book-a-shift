@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Calendar from './Calendar';
-import { fetchBookings, fetchClosedDays, bookShift, cancelShift, supabase } from './api';
+import { fetchBookings, fetchClosedDays, bookShift, cancelShift } from './api';
+import { supabase } from './supabaseClient';
 import AdminClosedDays from './AdminClosedDays';
 import UserStats from './UserStats';
+import AdminUserStats from './AdminUserStats';
+import ConfirmModal from './ConfirmModal';
 
 const HOURS = [8, 12, 16, 20]; // 8am, 12pm, 4pm, 8pm
 
@@ -18,21 +21,24 @@ const MONTHS = [
 
 const BookPage = ({ user, darkMode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
-    // Check if user is admin
-    useEffect(() => {
-      let isMounted = true;
-      if (!user?.id) return;
-      supabase
-        .from('roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .single()
-        .then(({ data }) => {
-          if (isMounted) setIsAdmin(data?.role === 'admin');
-        });
-      return () => { isMounted = false; };
-    }, [user]);
+  // Check if user is admin
+  useEffect(() => {
+    let isMounted = true;
+    if (!user?.id) return;
+    supabase
+      .from('roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (isMounted) setIsAdmin(data?.role === 'admin');
+      });
+    return () => { isMounted = false; };
+  }, [user]);
   const [bookings, setBookings] = useState({});
+  const [modal, setModal] = useState({ open: false, dateKey: null, hour: null });
+  const [cancelModal, setCancelModal] = useState({ open: false, dateKey: null, hour: null });
+  const userStatsRef = useRef();
   const [closedDays, setClosedDays] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -73,8 +79,18 @@ const BookPage = ({ user, darkMode }) => {
     return () => { isMounted = false; };
   }, [year, month]);
 
-  const handleBook = async (dateKey, hour) => {
+  const handleBook = (dateKey, hour) => {
+    setModal({ open: true, dateKey, hour });
+  };
+
+  const handleCancelClick = (dateKey, hour) => {
+    setCancelModal({ open: true, dateKey, hour });
+  };
+
+  const confirmBook = async () => {
     setError('');
+    setModal({ open: false, dateKey: null, hour: null });
+    const { dateKey, hour } = modal;
     try {
       const start_time = `${String(hour).padStart(2, '0')}:00:00`;
       const end_time = `${String(hour+4).padStart(2, '0')}:00:00`;
@@ -95,6 +111,7 @@ const BookPage = ({ user, darkMode }) => {
         bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id };
       });
       setBookings(bookingsMap);
+      if (userStatsRef.current && userStatsRef.current.refresh) userStatsRef.current.refresh();
     } catch (e) {
       setError('Booking failed');
     }
@@ -117,13 +134,24 @@ const BookPage = ({ user, darkMode }) => {
         bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id };
       });
       setBookings(bookingsMap);
+      if (userStatsRef.current && userStatsRef.current.refresh) userStatsRef.current.refresh();
     } catch (e) {
       setError('Cancel failed');
     }
   };
 
+  const confirmCancel = async () => {
+    if (!cancelModal.dateKey || cancelModal.hour == null) return;
+    await handleCancel(cancelModal.dateKey, cancelModal.hour);
+    setCancelModal({ open: false, dateKey: null, hour: null });
+  };
+
   const renderDay = (day) => {
-    const dateKey = `${year}-${month+1}-${day}`;
+    // Ensure dateKey is in YYYY-MM-DD format with leading zeros
+    const dateKey = `${year}-${String(month+1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const now = new Date();
+    const slotDate = new Date(`${dateKey}T00:00:00`);
+    const isPastDay = slotDate < new Date(now.getFullYear(), now.getMonth(), now.getDate());
     if (closedDays.includes(dateKey)) {
       return (
         <div className={`day-block${darkMode ? ' dark-mode' : ''}`} style={{ opacity: 0.5 }}>
@@ -139,15 +167,16 @@ const BookPage = ({ user, darkMode }) => {
           {HOURS.map(hour => {
             const booking = bookings[dateKey]?.[hour];
             const isMine = booking && booking.userId === user.id;
+            // Disable if booked by someone else or if in the past
+            const isPastSlot = isPastDay || (slotDate.getTime() === now.setHours(0,0,0,0) && hour < now.getHours());
             return (
               <button
                 key={hour}
-                className={`shift-btn ${booking ? (isMine ? 'mine' : 'booked') : 'available'}${darkMode ? ' dark-mode' : ''}`}
-                disabled={booking && !isMine}
-                onClick={() => booking ? handleCancel(dateKey, hour) : handleBook(dateKey, hour)}
+                className={`shift-btn ${booking ? (isMine ? 'mine' : 'booked') : 'available'}${isMine ? ' orange' : ''}${isPastSlot ? ' disabled' : ''}${darkMode ? ' dark-mode' : ''}`}
+                disabled={booking && !isMine || isPastSlot}
+                onClick={() => booking ? handleCancelClick(dateKey, hour) : handleBook(dateKey, hour)}
               >
                 {`${hour}:00 - ${hour+4}:00`}
-                {booking ? (isMine ? ' (Cancel)' : ' (Booked)') : ' (Book)'}
               </button>
             );
           })}
@@ -158,7 +187,22 @@ const BookPage = ({ user, darkMode }) => {
 
   return (
     <div>
-      <UserStats userId={user.id} />
+      <UserStats ref={userStatsRef} userId={user.id} />
+      {userStatsRef.current && userStatsRef.current.setMonthYear && userStatsRef.current.setMonthYear(year, month)}
+      <ConfirmModal
+        open={modal.open}
+        onClose={() => setModal({ open: false, dateKey: null, hour: null })}
+        onConfirm={confirmBook}
+        message={modal.dateKey && modal.hour ? `Book shift on ${modal.dateKey} from ${modal.hour}:00 to ${modal.hour+4}:00?` : ''}
+        darkMode={darkMode}
+      />
+      <ConfirmModal
+        open={cancelModal.open}
+        onClose={() => setCancelModal({ open: false, dateKey: null, hour: null })}
+        onConfirm={confirmCancel}
+        message={cancelModal.dateKey && cancelModal.hour != null ? `Cancel shift on ${cancelModal.dateKey} from ${cancelModal.hour}:00 to ${cancelModal.hour+4}:00?` : ''}
+        darkMode={darkMode}
+      />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
         <button
           className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
@@ -176,7 +220,7 @@ const BookPage = ({ user, darkMode }) => {
           Next &gt;
         </button>
       </div>
-      {isAdmin && <AdminClosedDays year={year} month={month} darkMode={darkMode} />}
+      {/* AdminClosedDays and AdminUserStats removed from main page. Use Closed Days tab for admin controls. */}
       {error && <div style={{ color: '#a00', marginBottom: 8 }}>{error}</div>}
       {loading ? <div>Loading...</div> : <Calendar year={year} month={month} renderDay={renderDay} darkMode={darkMode} />}
     </div>
