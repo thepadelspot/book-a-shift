@@ -1,3 +1,47 @@
+body.dark-mode {
+  background: #181818;
+  color: #e0e0e0;
+}
+
+.App.dark-mode {
+  background: #181818;
+  color: #e0e0e0;
+}
+
+.calendar.dark-mode {
+  border-color: #333;
+}
+.calendar.dark-mode th, .calendar.dark-mode td {
+  border: 1px solid #333;
+  background: #222;
+  color: #e0e0e0;
+}
+.day-block.dark-mode {
+  background: #222;
+}
+.shift-btn.available.dark-mode {
+  background: #234d23;
+  color: #aaffaa;
+}
+.shift-btn.booked.dark-mode {
+  background: #4d2323;
+  color: #ffaaaa;
+}
+.shift-btn.mine.dark-mode {
+  background: #4d3a23;
+  color: #ffe9b3;
+}
+.navbar.dark-mode {
+  background: #222;
+}
+.navbar button.dark-mode {
+  background: #333;
+  color: #e0e0e0;
+}
+.navbar .active.dark-mode {
+  background: #0056b3;
+  color: #fff;
+}
 /* Calendar styles */
 .calendar {
   border-collapse: collapse;

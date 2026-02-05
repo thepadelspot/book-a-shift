@@ -6,11 +6,22 @@ const HOURS = [8, 12, 16, 20]; // 8am, 12pm, 4pm, 8pm
 // For demo, store bookings in state
 const initialBookings = {};
 
-const BookPage = ({ user }) => {
+
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+const BookPage = ({ user, darkMode }) => {
   const [bookings, setBookings] = useState(initialBookings);
   const today = new Date();
-  const year = today.getFullYear();
-  const month = today.getMonth();
+  const [monthOffset, setMonthOffset] = useState(0);
+  const baseYear = today.getFullYear();
+  const baseMonth = today.getMonth();
+  const showDate = new Date(baseYear, baseMonth + monthOffset, 1);
+  const year = showDate.getFullYear();
+  const month = showDate.getMonth();
 
   const handleBook = (dateKey, hour) => {
     setBookings(prev => ({
@@ -36,7 +47,7 @@ const BookPage = ({ user }) => {
   const renderDay = (day) => {
     const dateKey = `${year}-${month+1}-${day}`;
     return (
-      <div className="day-block">
+      <div className={`day-block${darkMode ? ' dark-mode' : ''}`}>
         <div className="date-label">{day}</div>
         <div className="shifts">
           {HOURS.map(hour => {
@@ -45,7 +56,7 @@ const BookPage = ({ user }) => {
             return (
               <button
                 key={hour}
-                className={`shift-btn ${bookedBy ? (isMine ? 'mine' : 'booked') : 'available'}`}
+                className={`shift-btn ${bookedBy ? (isMine ? 'mine' : 'booked') : 'available'}${darkMode ? ' dark-mode' : ''}`}
                 disabled={bookedBy && !isMine}
                 onClick={() => bookedBy ? handleCancel(dateKey, hour) : handleBook(dateKey, hour)}
               >
@@ -61,8 +72,22 @@ const BookPage = ({ user }) => {
 
   return (
     <div>
-      <h2>Book a Shift</h2>
-      <Calendar year={year} month={month} renderDay={renderDay} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <button
+          onClick={() => setMonthOffset(m => m - 1)}
+          disabled={monthOffset === 0}
+        >
+          &lt; Prev
+        </button>
+        <h2>{MONTHS[month]} {year}</h2>
+        <button
+          onClick={() => setMonthOffset(m => m + 1)}
+          disabled={monthOffset === 6}
+        >
+          Next &gt;
+        </button>
+      </div>
+      <Calendar year={year} month={month} renderDay={renderDay} darkMode={darkMode} />
     </div>
   );
 };

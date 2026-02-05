@@ -4,7 +4,8 @@ const getDaysInMonth = (year, month) => {
   return new Date(year, month + 1, 0).getDate();
 };
 
-const Calendar = ({ year, month, renderDay }) => {
+
+const Calendar = ({ year, month, renderDay, darkMode }) => {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = new Date(year, month, 1).getDay();
   const weeks = [];
@@ -26,7 +27,7 @@ const Calendar = ({ year, month, renderDay }) => {
   }
 
   return (
-    <table className="calendar">
+    <table className={`calendar${darkMode ? ' dark-mode' : ''}`}>
       <thead>
         <tr>
           <th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
