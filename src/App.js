@@ -1,5 +1,6 @@
 
 import './App.css';
+import './admin-user-stats-center.css';
 import AuthProvider from './AuthProvider';
 import AuthContext from './AuthContext';
 import LoginPage from './LoginPage';
@@ -59,8 +60,9 @@ const AppContent = () => {
         <button
           className={`dark-mode-toggle${darkMode ? '' : ' light'}`}
           onClick={() => setDarkMode(d => !d)}
+          aria-label="Toggle dark mode"
         >
-          {darkMode ? 'Light Mode' : 'Dark Mode'}
+          {darkMode ? '🌙' : '☀️'}
         </button>
       </div>
       <Navbar onNavigate={setPage} currentPage={page} darkMode={darkMode} isAdmin={isAdmin} />
