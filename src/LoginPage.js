@@ -1,7 +1,8 @@
 import React, { useState, useContext } from 'react';
 import AuthContext from './AuthContext';
 
-const LoginPage = () => {
+
+const LoginPage = ({ darkMode }) => {
   const { login, loading } = useContext(AuthContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,8 +21,9 @@ const LoginPage = () => {
   if (loading) return <div>Loading...</div>;
 
   return (
-    <div className="login-container">
-      <h2>Login</h2>
+    <div className={`login-container${darkMode ? ' dark-mode' : ''}`}>
+      <h1>The Padel Spot</h1>
+      <h2>Sign In</h2>
       <form onSubmit={handleSubmit}>
         <input
           type="email"
@@ -37,7 +39,7 @@ const LoginPage = () => {
           onChange={e => setPassword(e.target.value)}
           required
         />
-        <button type="submit">Login</button>
+        <button type="submit" disabled={loading}>Login</button>
       </form>
       {error && <div className="error">{error}</div>}
     </div>

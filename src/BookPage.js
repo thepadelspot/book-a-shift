@@ -74,6 +74,7 @@ const BookPage = ({ user, darkMode }) => {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
         <button
+          className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
           onClick={() => setMonthOffset(m => m - 1)}
           disabled={monthOffset === 0}
         >
@@ -81,6 +82,7 @@ const BookPage = ({ user, darkMode }) => {
         </button>
         <h2>{MONTHS[month]} {year}</h2>
         <button
+          className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
           onClick={() => setMonthOffset(m => m + 1)}
           disabled={monthOffset === 6}
         >

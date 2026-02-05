@@ -10,21 +10,29 @@ import BookPage from './BookPage';
 
 
 
+
 const AppContent = () => {
   const { user, loading } = useContext(AuthContext);
   const [page, setPage] = useState('book');
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    const stored = localStorage.getItem('darkMode');
+    return stored === 'true';
+  });
 
   React.useEffect(() => {
     document.body.classList.toggle('dark-mode', darkMode);
+    localStorage.setItem('darkMode', darkMode);
   }, [darkMode]);
 
   if (loading) return <div>Loading...</div>;
-  if (!user) return <LoginPage />;
+  if (!user) return <LoginPage darkMode={darkMode} />;
   return (
     <div className={`App${darkMode ? ' dark-mode' : ''}`}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
-        <button onClick={() => setDarkMode(d => !d)}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <button
+          className={`dark-mode-toggle${darkMode ? '' : ' light'}`}
+          onClick={() => setDarkMode(d => !d)}
+        >
           {darkMode ? 'Light Mode' : 'Dark Mode'}
         </button>
       </div>
