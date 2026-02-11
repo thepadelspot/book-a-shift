@@ -2,6 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { fetchClosedDays } from './api';
 import { supabase } from './supabaseClient';
 
+function formatDateHuman(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const dayName = days[date.getDay()];
+  const dayNum = date.getDate();
+  const monthName = months[date.getMonth()];
+  const year = date.getFullYear();
+  function ordinal(n) {
+    if (n > 3 && n < 21) return 'th';
+    switch (n % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  }
+  return `${dayName} ${dayNum}${ordinal(dayNum)} ${monthName} ${year}`;
+}
+
 export default function AdminClosedDays({ year, month, darkMode }) {
   const [closedDays, setClosedDays] = useState([]);
   const [newDate, setNewDate] = useState('');
@@ -45,8 +66,8 @@ export default function AdminClosedDays({ year, month, darkMode }) {
 
   return (
     <div className={`admin-closed-days${darkMode ? ' dark-mode' : ''}`} style={{ margin: '2rem 0' }}>
-      <div className="closed-days-admin">
-        <form className="closed-days-form" onSubmit={e => { e.preventDefault(); handleAdd(); }}>
+      <div className={`closed-days-admin${darkMode ? ' dark-mode' : ''}`}>
+        <form className={`closed-days-form${darkMode ? ' dark-mode' : ''}`} onSubmit={e => { e.preventDefault(); handleAdd(); }}>
           <input
             type="date"
             value={newDate}
@@ -67,7 +88,7 @@ export default function AdminClosedDays({ year, month, darkMode }) {
           {closedDays.map(day => (
             <li key={day.id} className="closed-days-item">
               <div className="closed-days-date">
-                <strong>{day.date}</strong> {day.reason && <span className="closed-days-reason">({day.reason})</span>}
+                <strong>{formatDateHuman(day.date)}</strong> {day.reason && <span className="closed-days-reason">({day.reason})</span>}
               </div>
               <button className="closed-days-delete" onClick={() => handleDelete(day.id)} disabled={loading}>Delete</button>
             </li>

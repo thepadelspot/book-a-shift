@@ -21,7 +21,8 @@ const MONTHS = [
 
 const BookPage = ({ user, darkMode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
-  // Check if user is admin
+  const [userEmails, setUserEmails] = useState({});
+  // Check if user is admin and fetch user emails
   useEffect(() => {
     let isMounted = true;
     if (!user?.id) return;
@@ -32,6 +33,17 @@ const BookPage = ({ user, darkMode }) => {
       .single()
       .then(({ data, error }) => {
         if (isMounted) setIsAdmin(data?.role === 'admin');
+      });
+    // Fetch all user emails for admin
+    supabase
+      .from('users')
+      .select('id, email')
+      .then(({ data, error }) => {
+        if (isMounted && data) {
+          const emailMap = {};
+          data.forEach(u => { emailMap[u.id] = u.email; });
+          setUserEmails(emailMap);
+        }
       });
     return () => { isMounted = false; };
   }, [user]);
@@ -151,7 +163,8 @@ const BookPage = ({ user, darkMode }) => {
     const dateKey = `${year}-${String(month+1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const now = new Date();
     const slotDate = new Date(`${dateKey}T00:00:00`);
-    const isPastDay = slotDate < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const isPastDay = slotDate < todayDate;
     if (closedDays.includes(dateKey)) {
       return (
         <div className={`day-block${darkMode ? ' dark-mode' : ''}`} style={{ opacity: 0.5 }}>
@@ -168,16 +181,28 @@ const BookPage = ({ user, darkMode }) => {
             const booking = bookings[dateKey]?.[hour];
             const isMine = booking && booking.userId === user.id;
             // Disable if booked by someone else or if in the past
-            const isPastSlot = isPastDay || (slotDate.getTime() === now.setHours(0,0,0,0) && hour < now.getHours());
+            let isPastSlot = isPastDay;
+            // If current day, disable slots with hour < now.getHours()
+            if (!isPastDay && slotDate.getTime() === todayDate.getTime() && hour < now.getHours()) {
+              isPastSlot = true;
+            }
+            let bookedBy = null;
+            if (booking && isAdmin && userEmails[booking.userId]) {
+              bookedBy = userEmails[booking.userId];
+            }
             return (
-              <button
-                key={hour}
-                className={`shift-btn ${booking ? (isMine ? 'mine' : 'booked') : 'available'}${isMine ? ' orange' : ''}${isPastSlot ? ' disabled' : ''}${darkMode ? ' dark-mode' : ''}`}
-                disabled={booking && !isMine || isPastSlot}
-                onClick={() => booking ? handleCancelClick(dateKey, hour) : handleBook(dateKey, hour)}
-              >
-                {`${hour}:00 - ${hour+4}:00`}
-              </button>
+              <div key={hour} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <button
+                  className={`shift-btn ${booking ? (isMine ? 'mine' : 'booked') : 'available'}${isMine ? ' orange' : ''}${isPastSlot ? ' disabled' : ''}${darkMode ? ' dark-mode' : ''}`}
+                  disabled={booking && !isMine || isPastSlot}
+                  onClick={() => booking ? handleCancelClick(dateKey, hour) : handleBook(dateKey, hour)}
+                >
+                  {`${hour}:00 - ${hour+4}:00`}
+                </button>
+                {bookedBy && (
+                  <span style={{ fontSize: '0.92em', color: '#888', marginTop: 2 }}>Booked by: {bookedBy}</span>
+                )}
+              </div>
             );
           })}
         </div>
