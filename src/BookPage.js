@@ -3,7 +3,6 @@ import Calendar from './Calendar';
 import { fetchBookings, fetchClosedDays, bookShift, cancelShift } from './api';
 import { supabase } from './supabaseClient';
 import AdminClosedDays from './AdminClosedDays';
-import UserStats from './UserStats';
 import AdminUserStats from './AdminUserStats';
 import ConfirmModal from './ConfirmModal';
 
@@ -212,8 +211,6 @@ const BookPage = ({ user, darkMode }) => {
 
   return (
     <div>
-      <UserStats ref={userStatsRef} userId={user.id} />
-      {userStatsRef.current && userStatsRef.current.setMonthYear && userStatsRef.current.setMonthYear(year, month)}
       <ConfirmModal
         open={modal.open}
         onClose={() => setModal({ open: false, dateKey: null, hour: null })}
