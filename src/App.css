@@ -413,7 +413,7 @@ body.dark-mode {
     flex: 0 0 auto;
   }
   .navbar-fade-right {
-    right: 0;
+    display: none !important;
   }
 }
 .calendar th, .calendar td {
