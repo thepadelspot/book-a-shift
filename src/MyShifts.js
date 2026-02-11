@@ -121,14 +121,14 @@ export default function MyShifts({ user }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '2rem', width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '2rem', width: '100%', padding: '0 1rem', boxSizing: 'border-box' }}>
       <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: 600 }}>My Shifts</h3>
       {Object.keys(grouped).sort((a,b)=>b.localeCompare(a)).map(ym => {
         const arr = grouped[ym];
         const stats = getStats(arr);
         return (
-          <div key={ym} style={{ width: '100%', maxWidth: 480, marginBottom: 32, background: window.document.body.classList.contains('dark-mode') ? '#23272f' : '#fff', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: '1.2rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div key={ym} style={{ width: '100%', maxWidth: 480, marginBottom: 32, background: window.document.body.classList.contains('dark-mode') ? '#23272f' : '#fff', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: '1.2rem', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
               <span style={{ fontWeight: 600, fontSize: '1.15rem' }}>{getMonthName(ym)}</span>
               <span style={{ fontSize: '1rem', color: '#007bff' }}><strong>Hours:</strong> {stats.hours} &nbsp; <strong>Cancelled:</strong> {stats.cancellations}</span>
             </div>

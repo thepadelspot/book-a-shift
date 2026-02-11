@@ -65,8 +65,8 @@ export default function AdminClosedDays({ year, month, darkMode }) {
   };
 
   return (
-    <div className={`admin-closed-days${darkMode ? ' dark-mode' : ''}`} style={{ margin: '2rem 0' }}>
-      <div className={`closed-days-admin${darkMode ? ' dark-mode' : ''}`}>
+    <div className={`admin-closed-days${darkMode ? ' dark-mode' : ''}`} style={{ margin: '2rem 0', padding: '0 1rem', boxSizing: 'border-box' }}>
+      <div className={`closed-days-admin${darkMode ? ' dark-mode' : ''}`} style={{ boxSizing: 'border-box', width: '100%', maxWidth: 600, margin: '0 auto' }}>
         <form className={`closed-days-form${darkMode ? ' dark-mode' : ''}`} onSubmit={e => { e.preventDefault(); handleAdd(); }}>
           <input
             type="date"
