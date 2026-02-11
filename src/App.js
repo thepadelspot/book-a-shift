@@ -26,6 +26,7 @@ const AppContent = () => {
     return stored === 'true';
   });
   const [isAdmin, setIsAdmin] = React.useState(false);
+  const [isAdminLoading, setIsAdminLoading] = React.useState(true);
 
   React.useEffect(() => {
     document.body.classList.toggle('dark-mode', darkMode);
@@ -34,7 +35,11 @@ const AppContent = () => {
 
   React.useEffect(() => {
     let isMounted = true;
-    if (!user?.id) return;
+    if (!user?.id) {
+      setIsAdminLoading(false);
+      return;
+    }
+    setIsAdminLoading(true);
     import('./supabaseClient').then(({ supabase }) => {
       supabase
         .from('roles')
@@ -43,6 +48,9 @@ const AppContent = () => {
         .single()
         .then(({ data }) => {
           if (isMounted) setIsAdmin(data?.role === 'admin');
+        })
+        .finally(() => {
+          if (isMounted) setIsAdminLoading(false);
         });
     });
     return () => { isMounted = false; };
@@ -54,6 +62,7 @@ const AppContent = () => {
   }
   if (loading) return <div>Loading...</div>;
   if (!user) return <LoginPage darkMode={darkMode} />;
+  if (isAdminLoading) return <div>Loading...</div>;
   return (
     <div className={`App${darkMode ? ' dark-mode' : ''}`}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '0.5rem' }}>
