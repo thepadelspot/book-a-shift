@@ -1,5 +1,6 @@
 import React, { useState, useContext } from 'react';
 import AuthContext from './AuthContext';
+import verticalLogo from './assets/vertical.png';
 
 
 const LoginPage = ({ darkMode }) => {
@@ -22,7 +23,8 @@ const LoginPage = ({ darkMode }) => {
 
   return (
     <div className={`login-container${darkMode ? ' dark-mode' : ''}`}>
-      <h1>The Padel Spot</h1>
+      <img src={verticalLogo} alt="Padel Spot Logo" style={{ width: '220px', margin: '0 auto', display: 'block', marginBottom: '1rem' }} />
+      <h1>Shift Booking</h1>
       <h2>Sign In</h2>
       <form onSubmit={handleSubmit}>
         <input

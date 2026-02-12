@@ -8,6 +8,7 @@ import ResetPasswordPage from './ResetPasswordPage';
 import React, { useContext, useState } from 'react';
 import BookPage from './BookPage';
 import Navbar from './Navbar';
+import horizontalLogo from './assets/landscape.png';
 import AdminClosedDays from './AdminClosedDays';
 import AdminUserStats from './AdminUserStats';
 
@@ -65,7 +66,8 @@ const AppContent = () => {
   if (isAdminLoading) return <div>Loading...</div>;
   return (
     <div className={`App${darkMode ? ' dark-mode' : ''}`}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '0.5rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <img src={horizontalLogo} alt="Padel Spot Logo" style={{ height: '80px', marginBottom: '0.5rem' }} />
         <button
           className={`dark-mode-toggle${darkMode ? '' : ' light'}`}
           onClick={() => setDarkMode(d => !d)}
