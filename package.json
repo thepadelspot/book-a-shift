@@ -2,7 +2,7 @@
   "name": "book-a-shift",
   "version": "0.1.0",
   "private": true,
-  "homepage": "https://haroonchishty.github.io/book-a-shift",
+  "homepage": "https://thepadelspot.github.io/book-a-shift",
   "dependencies": {
     "@supabase/supabase-js": "^2.95.1",
     "@testing-library/dom": "^10.4.1",
