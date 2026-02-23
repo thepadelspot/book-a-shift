@@ -27,8 +27,12 @@ const Calendar = ({ year, month, renderDay, darkMode }) => {
     }
     // Fill the rest of the row with days
     while (days.length < columns && dayNum <= daysInMonth) {
-      // On mobile, show the day of week label above the date
       let content = renderDay(dayNum);
+      if (content === null) {
+        // Skip this day completely (do not increment days/cellNum)
+        dayNum++;
+        continue;
+      }
       if (isMobile) {
         const weekDayIdx = (cellNum) % 7;
         content = (

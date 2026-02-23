@@ -164,6 +164,10 @@ const BookPage = ({ user, darkMode }) => {
     const slotDate = new Date(`${dateKey}T00:00:00`);
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const isPastDay = slotDate < todayDate;
+    const isMobile = typeof window !== 'undefined' && window.innerWidth <= 700;
+    if (isMobile && isPastDay) {
+      return null;
+    }
     if (closedDays.includes(dateKey)) {
       return (
         <div className={`day-block${darkMode ? ' dark-mode' : ''}`} style={{ opacity: 0.5 }}>
@@ -199,7 +203,9 @@ const BookPage = ({ user, darkMode }) => {
                   {`${hour}:00 - ${hour+4}:00`}
                 </button>
                 {bookedBy && (
-                  <span style={{ fontSize: '0.92em', color: '#888', marginTop: 2 }}>Booked by: {bookedBy}</span>
+                  isAdmin && (
+                    <span style={{ fontSize: '0.92em', color: '#888', marginTop: 2 }}>Booked by: {bookedBy}</span>
+                  )
                 )}
               </div>
             );
