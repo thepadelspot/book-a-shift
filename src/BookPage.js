@@ -6,7 +6,7 @@ import AdminClosedDays from './AdminClosedDays';
 import AdminUserStats from './AdminUserStats';
 import ConfirmModal from './ConfirmModal';
 
-const HOURS = [8, 12, 16, 20]; // 8am, 12pm, 4pm, 8pm
+const HOURS = [7, 11, 15, 19]; // 8am, 12pm, 4pm, 8pm
 
 // For demo, store bookings in state
 const initialBookings = {};
