@@ -67,7 +67,7 @@ const AppContent = () => {
   return (
     <div className={`App${darkMode ? ' dark-mode' : ''}`}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.5rem' }}>
-        <img src={horizontalLogo} alt="Padel Spot Logo" style={{ height: '80px', marginBottom: '0.5rem' }} />
+        <img src={horizontalLogo} alt="Padel Spot Logo" style={{ height: '120px', marginBottom: '0.5rem' }} />
         <button
           className={`dark-mode-toggle${darkMode ? '' : ' light'}`}
           onClick={() => setDarkMode(d => !d)}
