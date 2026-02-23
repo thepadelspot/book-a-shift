@@ -88,7 +88,7 @@ const AppContent = () => {
       {isAdmin && page === 'adminstats' && (
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <h2>All User Stats</h2>
-          <AdminUserStats year={new Date().getFullYear()} month={new Date().getMonth()} darkMode={darkMode} />
+          <AdminUserStats year={new Date().getFullYear()} month={new Date().getMonth()} darkMode={darkMode} isAdmin={isAdmin} />
         </div>
       )}
     </div>

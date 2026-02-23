@@ -193,12 +193,13 @@ const BookPage = ({ user, darkMode }) => {
             if (booking && isAdmin && userEmails[booking.userId]) {
               bookedBy = userEmails[booking.userId];
             }
+            const canCancel = isMine || isAdmin;
             return (
               <div key={hour} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <button
                   className={`shift-btn ${booking ? (isMine ? 'mine' : 'booked') : 'available'}${isMine ? ' orange' : ''}${isPastSlot ? ' disabled' : ''}${darkMode ? ' dark-mode' : ''}`}
-                  disabled={booking && !isMine || isPastSlot}
-                  onClick={() => booking ? handleCancelClick(dateKey, hour) : handleBook(dateKey, hour)}
+                  disabled={(booking && !isMine && !isAdmin) || isPastSlot}
+                  onClick={() => booking ? (canCancel ? handleCancelClick(dateKey, hour) : null) : handleBook(dateKey, hour)}
                 >
                   {`${hour}:00 - ${hour+4}:00`}
                 </button>
@@ -213,6 +214,80 @@ const BookPage = ({ user, darkMode }) => {
         </div>
       </div>
     );
+  };
+
+  // Admin block shift UI state
+  const [blockUserId, setBlockUserId] = useState('');
+  const [blockStartDate, setBlockStartDate] = useState('');
+  const [blockStartTime, setBlockStartTime] = useState('');
+  const [blockEndDate, setBlockEndDate] = useState('');
+  const [blockEndTime, setBlockEndTime] = useState('');
+  const [blockLoading, setBlockLoading] = useState(false);
+  const [blockError, setBlockError] = useState('');
+
+  // Admin block shift handler
+  const handleBlockShift = async (e) => {
+    e.preventDefault();
+    setBlockError('');
+    setBlockLoading(true);
+    try {
+      if (!blockUserId || !blockStartDate || !blockStartTime || !blockEndDate || !blockEndTime) {
+        setBlockError('All fields required');
+        setBlockLoading(false);
+        return;
+      }
+      // Parse start and end datetimes
+      const start = new Date(`${blockStartDate}T${blockStartTime}`);
+      const end = new Date(`${blockEndDate}T${blockEndTime}`);
+      if (end <= start) {
+        setBlockError('End must be after start');
+        setBlockLoading(false);
+        return;
+      }
+      // For each 4-hour slot in the range, book a shift
+      let curr = new Date(start);
+      while (curr < end) {
+        const slotHour = curr.getHours();
+        // Only block if slot matches one of the defined HOURS
+        if (HOURS.includes(slotHour)) {
+          const slotDate = curr.toISOString().slice(0, 10);
+          const slotStart = `${String(slotHour).padStart(2, '0')}:00:00`;
+          const slotEnd = `${String(slotHour+4).padStart(2, '0')}:00:00`;
+          await bookShift({
+            user_id: blockUserId,
+            date: slotDate,
+            start_time: slotStart,
+            end_time: slotEnd
+          });
+        }
+        // Move to next slot (4 hours)
+        curr.setHours(curr.getHours() + 4);
+        // If we cross midnight, set to next day at 7am
+        if (curr.getHours() >= 23) {
+          curr.setDate(curr.getDate() + 1);
+          curr.setHours(HOURS[0]);
+        }
+      }
+      setBlockUserId('');
+      setBlockStartDate('');
+      setBlockStartTime('');
+      setBlockEndDate('');
+      setBlockEndTime('');
+      // Refetch bookings
+      const bookingsData = await fetchBookings(year, month);
+      const bookingsMap = {};
+      bookingsData.forEach(b => {
+        if (b.status !== 'booked') return;
+        const dKey = b.date;
+        const h = parseInt(b.start_time.split(':')[0], 10);
+        if (!bookingsMap[dKey]) bookingsMap[dKey] = {};
+        bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id };
+      });
+      setBookings(bookingsMap);
+    } catch (e) {
+      setBlockError('Block failed');
+    }
+    setBlockLoading(false);
   };
 
   return (
