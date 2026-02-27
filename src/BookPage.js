@@ -290,20 +290,42 @@ const BookPage = ({ user, darkMode }) => {
     setBlockLoading(false);
   };
 
+  // Helper to format date as 'Tuesday 8th Feb 2026'
+  function formatDateHuman(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const dayName = days[date.getDay()];
+    const dayNum = date.getDate();
+    const monthName = months[date.getMonth()];
+    const year = date.getFullYear();
+    function ordinal(n) {
+      if (n > 3 && n < 21) return 'th';
+      switch (n % 10) {
+        case 1: return 'st';
+        case 2: return 'nd';
+        case 3: return 'rd';
+        default: return 'th';
+      }
+    }
+    return `${dayName} ${dayNum}${ordinal(dayNum)} ${monthName} ${year}`;
+  }
+
   return (
     <div>
       <ConfirmModal
         open={modal.open}
         onClose={() => setModal({ open: false, dateKey: null, hour: null })}
         onConfirm={confirmBook}
-        message={modal.dateKey && modal.hour ? `Book shift on ${modal.dateKey} from ${modal.hour}:00 to ${modal.hour+4}:00?` : ''}
+        message={modal.dateKey && modal.hour ? `Book shift on ${formatDateHuman(modal.dateKey)} from ${modal.hour}:00 to ${modal.hour+4}:00?` : ''}
         darkMode={darkMode}
       />
       <ConfirmModal
         open={cancelModal.open}
         onClose={() => setCancelModal({ open: false, dateKey: null, hour: null })}
         onConfirm={confirmCancel}
-        message={cancelModal.dateKey && cancelModal.hour != null ? `Cancel shift on ${cancelModal.dateKey} from ${cancelModal.hour}:00 to ${cancelModal.hour+4}:00?` : ''}
+        message={cancelModal.dateKey && cancelModal.hour != null ? `Cancel shift on ${formatDateHuman(cancelModal.dateKey)} from ${cancelModal.hour}:00 to ${cancelModal.hour+4}:00?` : ''}
         darkMode={darkMode}
       />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
@@ -318,7 +340,7 @@ const BookPage = ({ user, darkMode }) => {
         <button
           className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
           onClick={() => setMonthOffset(m => m + 1)}
-          disabled={monthOffset === 6}
+          disabled={monthOffset === 1}
         >
           Next &gt;
         </button>

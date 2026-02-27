@@ -16,10 +16,16 @@ const Calendar = ({ year, month, renderDay, darkMode }) => {
   const weeks = [];
   let days = [];
   let isFirstRow = true;
-  const initialEmpty = isMobile ? (firstDay % columns) : firstDay;
+  const initialEmpty = isMobile ? 0 : firstDay;
+  let visibleDayNums = [];
+  // Collect visible days for mobile weekday calculation
+  for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+    if (renderDay(dayNum) !== null) visibleDayNums.push(dayNum);
+  }
+  let mobileDayIdx = 0;
   for (let dayNum = 1, cellNum = 0; dayNum <= daysInMonth; ) {
-    // For the first row, add initial empty tds
-    if (isFirstRow) {
+    // For desktop, add initial empty tds
+    if (!isMobile && isFirstRow) {
       for (let i = 0; i < initialEmpty; i++, cellNum++) {
         days.push(<td key={`empty-${i}`}></td>);
       }
@@ -29,18 +35,19 @@ const Calendar = ({ year, month, renderDay, darkMode }) => {
     while (days.length < columns && dayNum <= daysInMonth) {
       let content = renderDay(dayNum);
       if (content === null) {
-        // Skip this day completely (do not increment days/cellNum)
         dayNum++;
         continue;
       }
       if (isMobile) {
-        const weekDayIdx = (cellNum) % 7;
+        // Calculate the correct weekday for this visible day
+        const weekDayIdx = new Date(year, month, dayNum).getDay();
         content = (
           <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
             <span style={{fontSize:'0.95em',fontWeight:600,marginBottom:2,color:'#007bff'}}>{weekLabels[weekDayIdx]}</span>
             {content}
           </div>
         );
+        mobileDayIdx++;
       }
       days.push(<td key={dayNum}>{content}</td>);
       dayNum++;
@@ -60,11 +67,13 @@ const Calendar = ({ year, month, renderDay, darkMode }) => {
   }
   return (
     <table className={`calendar${darkMode ? ' dark-mode' : ''}`}>
-      <thead>
-        <tr>
-          {weekLabels.slice(0, columns).map(label => <th key={label}>{label}</th>)}
-        </tr>
-      </thead>
+      {!isMobile && (
+        <thead>
+          <tr>
+            {weekLabels.slice(0, columns).map(label => <th key={label}>{label}</th>)}
+          </tr>
+        </thead>
+      )}
       <tbody>{weeks}</tbody>
     </table>
   );
