@@ -48,6 +48,7 @@ const BookPage = ({ user, darkMode }) => {
   }, [user]);
   const [bookings, setBookings] = useState({});
   const [modal, setModal] = useState({ open: false, dateKey: null, hour: null });
+  const [adminBookUserId, setAdminBookUserId] = useState('');
   const [cancelModal, setCancelModal] = useState({ open: false, dateKey: null, hour: null });
   const userStatsRef = useRef();
   const [closedDays, setClosedDays] = useState([]);
@@ -92,6 +93,7 @@ const BookPage = ({ user, darkMode }) => {
 
   const handleBook = (dateKey, hour) => {
     setModal({ open: true, dateKey, hour });
+    if (isAdmin) setAdminBookUserId(user.id); // default to self
   };
 
   const handleCancelClick = (dateKey, hour) => {
@@ -105,8 +107,9 @@ const BookPage = ({ user, darkMode }) => {
     try {
       const start_time = `${String(hour).padStart(2, '0')}:00:00`;
       const end_time = `${String(hour+4).padStart(2, '0')}:00:00`;
+      const bookingUserId = isAdmin ? adminBookUserId : user.id;
       await bookShift({
-        user_id: user.id,
+        user_id: bookingUserId,
         date: dateKey,
         start_time,
         end_time
@@ -314,11 +317,31 @@ const BookPage = ({ user, darkMode }) => {
 
   return (
     <div>
+      {/* Admin booking for another user */}
       <ConfirmModal
         open={modal.open}
         onClose={() => setModal({ open: false, dateKey: null, hour: null })}
         onConfirm={confirmBook}
-        message={modal.dateKey && modal.hour ? `Book shift on ${formatDateHuman(modal.dateKey)} from ${modal.hour}:00 to ${modal.hour+4}:00?` : ''}
+        message={modal.dateKey && modal.hour ? (
+          <div>
+            {`Book shift on ${formatDateHuman(modal.dateKey)} from ${modal.hour}:00 to ${modal.hour+4}:00?`}
+            {isAdmin && (
+              <div style={{ marginTop: 12 }}>
+                <label htmlFor="admin-book-user" style={{ marginRight: 8 }}>For user:</label>
+                <select
+                  id="admin-book-user"
+                  value={adminBookUserId}
+                  onChange={e => setAdminBookUserId(e.target.value)}
+                  style={{ minWidth: 180 }}
+                >
+                  {Object.entries(userEmails).map(([id, email]) => (
+                    <option key={id} value={id}>{email}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        ) : ''}
         darkMode={darkMode}
       />
       <ConfirmModal
