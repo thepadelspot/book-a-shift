@@ -72,9 +72,15 @@ const AppContent = () => {
           className={`dark-mode-toggle${darkMode ? '' : ' light'}`}
           onClick={() => setDarkMode(d => !d)}
           aria-label="Toggle dark mode"
+          style={{ marginBottom: user?.firstName ? '0.5rem' : 0 }}
         >
           {darkMode ? '🌙' : '☀️'}
         </button>
+        {(user?.firstName || user?.email) && (
+          <span style={{ fontSize: '1.1rem', fontWeight: 500 }}>
+            Hello {user?.firstName ? user.firstName : user.email}
+          </span>
+        )}
       </div>
       <Navbar onNavigate={setPage} currentPage={page} darkMode={darkMode} isAdmin={isAdmin} />
       {page === 'book' && <BookPage user={user} darkMode={darkMode} />}

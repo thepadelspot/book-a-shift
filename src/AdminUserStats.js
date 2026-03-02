@@ -47,7 +47,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
       setError('');
       try {
         // Fetch users
-        const { data: usersData, error: usersError } = await supabase.from('users').select('id, email');
+        const { data: usersData, error: usersError } = await supabase.from('users').select('id, email, firstName, lastName');
         if (usersError) throw new Error('Failed to fetch users');
         // Get all bookings for the selected month
         const { from, to } = getMonthRange(viewYear, viewMonth);
@@ -163,7 +163,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
             <select value={blockUserId} onChange={e => setBlockUserId(e.target.value)} required style={{ minWidth: 160 }}>
               <option value="">Select user</option>
               {users.map(u => (
-                <option key={u.id} value={u.id}>{u.email}</option>
+                <option key={u.id} value={u.id}>{`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}</option>
               ))}
             </select>
             <input type="date" value={blockStartDate} onChange={e => setBlockStartDate(e.target.value)} required />
@@ -196,7 +196,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
-            <th>Email</th>
+            <th>Name</th>
             <th>Hours Worked</th>
             <th>Hours Booked</th>
             <th>Shifts Booked</th>
@@ -206,7 +206,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
         <tbody>
           {users.map(u => (
             <tr key={u.id}>
-              <td>{u.email}</td>
+              <td>{stats[u.id]?.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}</td>
               <td>{stats[u.id]?.hoursWorked || 0}</td>
               <td>{stats[u.id]?.hoursBooked || 0}</td>
               <td>{stats[u.id]?.booked || 0}</td>

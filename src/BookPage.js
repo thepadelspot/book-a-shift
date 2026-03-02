@@ -20,7 +20,7 @@ const MONTHS = [
 
 const BookPage = ({ user, darkMode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [userEmails, setUserEmails] = useState({});
+  const [userInfos, setUserInfos] = useState({});
   // Check if user is admin and fetch user emails
   useEffect(() => {
     let isMounted = true;
@@ -33,15 +33,15 @@ const BookPage = ({ user, darkMode }) => {
       .then(({ data, error }) => {
         if (isMounted) setIsAdmin(data?.role === 'admin');
       });
-    // Fetch all user emails for admin
+    // Fetch all user info for admin
     supabase
       .from('users')
-      .select('id, email')
+      .select('id, email, firstName, lastName')
       .then(({ data, error }) => {
         if (isMounted && data) {
-          const emailMap = {};
-          data.forEach(u => { emailMap[u.id] = u.email; });
-          setUserEmails(emailMap);
+          const infoMap = {};
+          data.forEach(u => { infoMap[u.id] = u; });
+          setUserInfos(infoMap);
         }
       });
     return () => { isMounted = false; };
@@ -193,8 +193,9 @@ const BookPage = ({ user, darkMode }) => {
               isPastSlot = true;
             }
             let bookedBy = null;
-            if (booking && isAdmin && userEmails[booking.userId]) {
-              bookedBy = userEmails[booking.userId];
+            if (booking && isAdmin && userInfos[booking.userId]) {
+              const u = userInfos[booking.userId];
+              bookedBy = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email;
             }
             const canCancel = isMine || isAdmin;
             return (
@@ -334,8 +335,8 @@ const BookPage = ({ user, darkMode }) => {
                   onChange={e => setAdminBookUserId(e.target.value)}
                   style={{ minWidth: 180 }}
                 >
-                  {Object.entries(userEmails).map(([id, email]) => (
-                    <option key={id} value={id}>{email}</option>
+                  {Object.entries(userInfos).map(([id, u]) => (
+                    <option key={id} value={id}>{`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}</option>
                   ))}
                 </select>
               </div>

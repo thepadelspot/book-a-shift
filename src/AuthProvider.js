@@ -10,45 +10,30 @@ const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('AuthProvider useEffect running');
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user || null);
-      setLoading(false);
-      // Insert user info into users table if not present
-      if (session?.user) {
-        console.log('Attempting upsert to users table:', session.user);
-        supabase.from('users').upsert([
-          { id: session.user.id, email: session.user.email }
-        ], { onConflict: ['id'] })
-        .then(({ error, data }) => {
-          if (error) {
-            console.error('User upsert error:', error);
-          } else {
-            console.log('User upsert success:', data);
-          }
-        });
-      } else {
-        console.log('No session.user in getSession');
+    async function fetchAndSetUser(sessionUser) {
+      if (!sessionUser) {
+        setUser(null);
+        setLoading(false);
+        return;
       }
+      // Upsert user info
+      await supabase.from('users').upsert([
+        { id: sessionUser.id, email: sessionUser.email }
+      ], { onConflict: ['id'] });
+      // Fetch profile info
+      const { data: profile } = await supabase
+        .from('users')
+        .select('firstName, lastName')
+        .eq('id', sessionUser.id)
+        .single();
+      setUser({ ...sessionUser, ...profile });
+      setLoading(false);
+    }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      fetchAndSetUser(session?.user);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-      // Insert user info into users table if not present
-      if (session?.user) {
-        console.log('Attempting upsert to users table (auth state change):', session.user);
-        supabase.from('users').upsert([
-          { id: session.user.id, email: session.user.email }
-        ], { onConflict: ['id'] })
-        .then(({ error, data }) => {
-          if (error) {
-            console.error('User upsert error (auth state change):', error);
-          } else {
-            console.log('User upsert success (auth state change):', data);
-          }
-        });
-      } else {
-        console.log('No session.user in onAuthStateChange');
-      }
+      fetchAndSetUser(session?.user);
     });
     return () => {
       listener.subscription.unsubscribe();
