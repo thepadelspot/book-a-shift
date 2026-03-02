@@ -92,8 +92,20 @@ const BookPage = ({ user, darkMode }) => {
   }, [year, month]);
 
   const handleBook = (dateKey, hour) => {
-    setModal({ open: true, dateKey, hour });
-    if (isAdmin) setAdminBookUserId(user.id); // default to self
+    if (isAdmin) {
+      // Multi-select: toggle selection
+      setSelectedShifts(prev => {
+        const exists = prev.some(s => s.dateKey === dateKey && s.hour === hour);
+        if (exists) {
+          return prev.filter(s => !(s.dateKey === dateKey && s.hour === hour));
+        } else {
+          return [...prev, { dateKey, hour }];
+        }
+      });
+      setAdminBookUserId(user.id); // default to self
+    } else {
+      setModal({ open: true, dateKey, hour });
+    }
   };
 
   const handleCancelClick = (dateKey, hour) => {
@@ -186,9 +198,7 @@ const BookPage = ({ user, darkMode }) => {
           {HOURS.map(hour => {
             const booking = bookings[dateKey]?.[hour];
             const isMine = booking && booking.userId === user.id;
-            // Disable if booked by someone else or if in the past
             let isPastSlot = isPastDay;
-            // If current day, disable slots with hour < now.getHours()
             if (!isPastDay && slotDate.getTime() === todayDate.getTime() && hour < now.getHours()) {
               isPastSlot = true;
             }
@@ -198,12 +208,15 @@ const BookPage = ({ user, darkMode }) => {
               bookedBy = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email;
             }
             const canCancel = isMine || isAdmin;
+            // Multi-select highlight for admins
+            const isSelected = isAdmin && !booking && selectedShifts.some(s => s.dateKey === dateKey && s.hour === hour);
             return (
               <div key={hour} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <button
-                  className={`shift-btn ${booking ? (isMine ? 'mine' : 'booked') : 'available'}${isMine ? ' orange' : ''}${isPastSlot ? ' disabled' : ''}${darkMode ? ' dark-mode' : ''}`}
+                  className={`shift-btn ${booking ? (isMine ? 'mine' : 'booked') : 'available'}${isMine ? ' orange' : ''}${isPastSlot ? ' disabled' : ''}${isSelected ? ' selected' : ''}${darkMode ? ' dark-mode' : ''}`}
                   disabled={(booking && !isMine && !isAdmin) || isPastSlot}
                   onClick={() => booking ? (canCancel ? handleCancelClick(dateKey, hour) : null) : handleBook(dateKey, hour)}
+                  style={isSelected ? { border: '2px solid #2ecc40', boxShadow: '0 0 6px #2ecc40' } : {}}
                 >
                   {`${hour}:00 - ${hour+4}:00`}
                 </button>
@@ -316,6 +329,9 @@ const BookPage = ({ user, darkMode }) => {
     return `${dayName} ${dayNum}${ordinal(dayNum)} ${monthName} ${year}`;
   }
 
+  // Multi-select state for admins
+  const [selectedShifts, setSelectedShifts] = useState([]); // [{dateKey, hour}]
+
   return (
     <div>
       {/* Admin booking for another user */}
@@ -372,6 +388,60 @@ const BookPage = ({ user, darkMode }) => {
       {/* AdminClosedDays and AdminUserStats removed from main page. Use Closed Days tab for admin controls. */}
       {error && <div style={{ color: '#a00', marginBottom: 8 }}>{error}</div>}
       {loading ? <div>Loading...</div> : <Calendar year={year} month={month} renderDay={renderDay} darkMode={darkMode} />}
+      {isAdmin && selectedShifts.length > 0 && (
+        <div style={{ margin: '16px 0', padding: '12px', border: '1px solid #2ecc40', borderRadius: 8, background: darkMode ? '#222' : '#f8fff8' }}>
+          <div style={{ marginBottom: 8 }}>
+            <label htmlFor="admin-book-user-multi" style={{ marginRight: 8 }}>Book selected shifts for:</label>
+            <select
+              id="admin-book-user-multi"
+              value={adminBookUserId}
+              onChange={e => setAdminBookUserId(e.target.value)}
+              style={{ minWidth: 180 }}
+            >
+              {Object.entries(userInfos).map(([id, u]) => (
+                <option key={id} value={id}>{`${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            style={{ background: '#2ecc40', color: '#fff', padding: '8px 18px', borderRadius: 6, fontWeight: 600, fontSize: '1.1em', border: 'none', cursor: 'pointer' }}
+            onClick={async () => {
+              setError('');
+              try {
+                for (const s of selectedShifts) {
+                  const start_time = `${String(s.hour).padStart(2, '0')}:00:00`;
+                  const end_time = `${String(s.hour+4).padStart(2, '0')}:00:00`;
+                  await bookShift({
+                    user_id: adminBookUserId,
+                    date: s.dateKey,
+                    start_time,
+                    end_time
+                  });
+                }
+                setSelectedShifts([]);
+                // Refetch bookings
+                const bookingsData = await fetchBookings(year, month);
+                const bookingsMap = {};
+                bookingsData.forEach(b => {
+                  if (b.status !== 'booked') return;
+                  const dKey = b.date;
+                  const h = parseInt(b.start_time.split(':')[0], 10);
+                  if (!bookingsMap[dKey]) bookingsMap[dKey] = {};
+                  bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id };
+                });
+                setBookings(bookingsMap);
+                if (userStatsRef.current && userStatsRef.current.refresh) userStatsRef.current.refresh();
+              } catch (e) {
+                setError('Multi-booking failed');
+              }
+            }}
+          >Book Selected Shifts</button>
+          <button
+            style={{ marginLeft: 12, background: '#eee', color: '#333', padding: '8px 18px', borderRadius: 6, fontWeight: 500, fontSize: '1em', border: 'none', cursor: 'pointer' }}
+            onClick={() => setSelectedShifts([])}
+          >Cancel</button>
+        </div>
+      )}
     </div>
   );
 };
