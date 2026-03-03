@@ -213,6 +213,32 @@
   color: #fff;
 }
 
+.export-pdf-btn {
+  background: #28a745;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.4rem 1rem;
+  font-size: 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+.export-pdf-btn:hover {
+  background: #218838;
+}
+.export-pdf-btn:disabled {
+  background: #aaa;
+  cursor: not-allowed;
+}
+.export-pdf-btn.dark-mode {
+  background: #1e7e34;
+  color: #fff;
+}
+.export-pdf-btn.dark-mode:hover {
+  background: #28a745;
+}
+
 .dark-mode-toggle {
   background: #222;
   color: #e0e0e0;

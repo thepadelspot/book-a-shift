@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
-
-
+import { generateMonthlyPayePDF } from './utils/pdfExport';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -38,6 +37,9 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
   const [blockEndTime, setBlockEndTime] = useState('');
   const [blockLoading, setBlockLoading] = useState(false);
   const [blockError, setBlockError] = useState('');
+
+  // PDF export state
+  const [exporting, setExporting] = useState(false);
 
   // Fetch users and bookings for stats
   useEffect(() => {
@@ -97,6 +99,32 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
     fetchAll();
     return () => { isMounted = false; };
   }, [viewYear, viewMonth]);
+
+  // PDF export handler
+  const handleExportPDF = async () => {
+    setExporting(true);
+    try {
+      // Get detailed bookings for the current month
+      const { from, to } = getMonthRange(viewYear, viewMonth);
+      const { data: bookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('*')
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: true })
+        .order('start_time', { ascending: true });
+
+      if (bookingsError) throw bookingsError;
+
+      // Generate PDF
+      generateMonthlyPayePDF(users, bookings, viewMonth, viewYear);
+    } catch (err) {
+      alert('Failed to generate PDF. Please try again.');
+      console.error('PDF generation error:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Admin block shift handler
   const handleBlockShift = async (e) => {
@@ -176,21 +204,30 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
           {blockError && <div style={{ color: '#a00', marginTop: 6 }}>{blockError}</div>}
         </form>
       )}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', gap: '1rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button
+            className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
+            onClick={() => setMonthOffset(m => m - 1)}
+            disabled={monthOffset === -24}
+          >
+            &lt; Prev
+          </button>
+          <h3>{MONTHS[viewMonth]} {viewYear}</h3>
+          <button
+            className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
+            onClick={() => setMonthOffset(m => m + 1)}
+            disabled={monthOffset === 24}
+          >
+            Next &gt;
+          </button>
+        </div>
         <button
-          className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
-          onClick={() => setMonthOffset(m => m - 1)}
-          disabled={monthOffset === -24}
+          className={`export-pdf-btn${darkMode ? ' dark-mode' : ''}`}
+          onClick={handleExportPDF}
+          disabled={exporting || loading}
         >
-          &lt; Prev
-        </button>
-        <h3>{MONTHS[viewMonth]} {viewYear}</h3>
-        <button
-          className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
-          onClick={() => setMonthOffset(m => m + 1)}
-          disabled={monthOffset === 24}
-        >
-          Next &gt;
+          {exporting ? 'Generating...' : 'Export Month PDF'}
         </button>
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
