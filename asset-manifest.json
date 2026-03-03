@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/book-a-shift/static/css/main.df58c1b5.css",
-    "main.js": "/book-a-shift/static/js/main.8256ff6b.js",
+    "main.js": "/book-a-shift/static/js/main.9492eef1.js",
     "static/js/239.1f5148cd.chunk.js": "/book-a-shift/static/js/239.1f5148cd.chunk.js",
     "static/js/977.caac2a0e.chunk.js": "/book-a-shift/static/js/977.caac2a0e.chunk.js",
     "static/js/455.c11e9423.chunk.js": "/book-a-shift/static/js/455.c11e9423.chunk.js",
@@ -10,7 +10,7 @@
     "static/media/landscape.png": "/book-a-shift/static/media/landscape.a1b0d02028552a73ca5a.png",
     "index.html": "/book-a-shift/index.html",
     "main.df58c1b5.css.map": "/book-a-shift/static/css/main.df58c1b5.css.map",
-    "main.8256ff6b.js.map": "/book-a-shift/static/js/main.8256ff6b.js.map",
+    "main.9492eef1.js.map": "/book-a-shift/static/js/main.9492eef1.js.map",
     "239.1f5148cd.chunk.js.map": "/book-a-shift/static/js/239.1f5148cd.chunk.js.map",
     "977.caac2a0e.chunk.js.map": "/book-a-shift/static/js/977.caac2a0e.chunk.js.map",
     "455.c11e9423.chunk.js.map": "/book-a-shift/static/js/455.c11e9423.chunk.js.map",
@@ -18,6 +18,6 @@
   },
   "entrypoints": [
     "static/css/main.df58c1b5.css",
-    "static/js/main.8256ff6b.js"
+    "static/js/main.9492eef1.js"
   ]
 }
