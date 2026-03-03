@@ -36,6 +36,18 @@ function formatTimeHuman(timeStr) {
   return `${hour}${suffix}`;
 }
 
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+function getMonthRange(year, month) {
+  const from = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  return { from, to };
+}
+
 export default function MyShifts({ user }) {
   // Track dark mode from body class
   const [darkMode, setDarkMode] = useState(() => document.body.classList.contains('dark-mode'));
@@ -46,37 +58,37 @@ export default function MyShifts({ user }) {
     observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, []);
+
+  // Month navigation
+  const today = new Date();
+  const [monthOffset, setMonthOffset] = useState(0);
+  const baseYear = today.getFullYear();
+  const baseMonth = today.getMonth();
+  const showDate = new Date(baseYear, baseMonth + monthOffset, 1);
+  const viewYear = showDate.getFullYear();
+  const viewMonth = showDate.getMonth();
+
   const [shifts, setShifts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState({ open: false, bookingId: null, label: '' });
-  const [grouped, setGrouped] = useState({});
-//   const [loading, setLoading] = useState(true);
-//   const [error, setError] = useState('');
-//   const [modal, setModal] = useState({ open: false, bookingId: null, label: '' });
 
-  // Fetch all shifts (booked and canceled) for the user
+  // Fetch shifts for the selected month
   const loadShifts = async () => {
     setLoading(true);
     setError('');
     try {
+      const { from, to } = getMonthRange(viewYear, viewMonth);
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
         .eq('user_id', user.id)
-        .order('date', { ascending: false })
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: true })
         .order('start_time', { ascending: true });
       if (error) throw error;
-      setShifts(data);
-      // Group by year-month
-      const groupedObj = {};
-      data.forEach(shift => {
-        const d = new Date(shift.date);
-        const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-        if (!groupedObj[ym]) groupedObj[ym] = [];
-        groupedObj[ym].push(shift);
-      });
-      setGrouped(groupedObj);
+      setShifts(data || []);
     } catch (e) {
       setError('Failed to load shifts');
     }
@@ -86,7 +98,7 @@ export default function MyShifts({ user }) {
   useEffect(() => {
     loadShifts();
     // eslint-disable-next-line
-  }, [user.id]);
+  }, [user.id, viewYear, viewMonth]);
 
   const handleCancel = (bookingId, label) => {
     setModal({ open: true, bookingId, label });
@@ -105,44 +117,73 @@ export default function MyShifts({ user }) {
 
   if (loading) return <div style={{ textAlign: 'center', marginTop: '2rem' }}>Loading your shifts...</div>;
   if (error) return <div style={{ color: 'red', textAlign: 'center', marginTop: '2rem' }}>{error}</div>;
-  if (!shifts.length) return <div style={{ textAlign: 'center', marginTop: '2rem' }}>You have no shifts.</div>;
 
-  // Helper to get month name
-  const getMonthName = (ym) => {
-    const [year, month] = ym.split('-');
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    return `${months[parseInt(month,10)-1]} ${year}`;
-  };
-
-  // Helper to compute stats for a month
-  const getStats = (arr) => {
-    let hours = 0, cancellations = 0;
-    arr.forEach(b => {
+  // Helper to compute stats for the month
+  const getStats = () => {
+    let shiftsWorked = 0, shiftsBooked = 0, cancellations = 0;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    shifts.forEach(b => {
       if (b.status === 'booked') {
-        const start = parseInt(b.start_time.split(':')[0], 10);
-        const end = parseInt(b.end_time.split(':')[0], 10);
-        hours += end - start;
+        if (b.date < todayStr) {
+          shiftsWorked++;
+        } else {
+          shiftsBooked++;
+        }
       } else if (b.status === 'canceled') {
         cancellations++;
       }
     });
-    return { hours, cancellations };
+    return { shiftsWorked, shiftsBooked, cancellations };
   };
+
+  // Check if a shift has ended (past the end time)
+  const hasShiftEnded = (shift) => {
+    const now = new Date();
+    const shiftDateTime = new Date(`${shift.date}T${shift.end_time}`);
+    return now > shiftDateTime;
+  };
+
+  const stats = getStats();
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '2rem', width: '100%', padding: '0 1rem', boxSizing: 'border-box', background: darkMode ? '#181818' : '#fff', color: darkMode ? '#e0e0e0' : '#181818', minHeight: '100vh' }}>
       <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: 600 }}>My Shifts</h3>
-      {Object.keys(grouped).sort((a,b)=>b.localeCompare(a)).map(ym => {
-        const arr = grouped[ym];
-        const stats = getStats(arr);
-        return (
-          <div key={ym} style={{ width: '100%', maxWidth: 480, marginBottom: 32, background: darkMode ? '#23272f' : '#fff', borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.07)', padding: '1.2rem', boxSizing: 'border-box', color: darkMode ? '#e0e0e0' : '#181818' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
-              <span style={{ fontWeight: 600, fontSize: '1.15rem' }}>{getMonthName(ym)}</span>
-              <span style={{ fontSize: '1rem', color: '#007bff' }}><strong>Hours:</strong> {stats.hours} &nbsp; <strong>Cancelled:</strong> {stats.cancellations}</span>
-            </div>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {arr.map(shift => (
+
+      {/* Month navigation */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
+        <button
+          className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
+          onClick={() => setMonthOffset(m => m - 1)}
+          disabled={monthOffset === -24}
+        >
+          &lt; Prev
+        </button>
+        <h3 style={{ margin: 0, minWidth: '180px', textAlign: 'center' }}>{MONTHS[viewMonth]} {viewYear}</h3>
+        <button
+          className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
+          onClick={() => setMonthOffset(m => m + 1)}
+          disabled={monthOffset === 24}
+        >
+          Next &gt;
+        </button>
+      </div>
+
+      {/* Stats summary */}
+      <div style={{ fontSize: '1rem', color: '#007bff', marginBottom: '1.5rem' }}>
+        <strong>Shifts Worked:</strong> {stats.shiftsWorked} &nbsp;
+        <strong>Shifts Booked:</strong> {stats.shiftsBooked} &nbsp;
+        <strong>Cancelled:</strong> {stats.cancellations}
+      </div>
+
+      {/* Shifts list */}
+      {shifts.length === 0 ? (
+        <div style={{ textAlign: 'center', marginTop: '2rem', color: '#888' }}>No shifts for this month</div>
+      ) : (
+        <div style={{ width: '100%', maxWidth: 480 }}>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {shifts.map(shift => {
+              const shiftEnded = hasShiftEnded(shift);
+              return (
                 <li
                   key={shift.id}
                   style={{
@@ -156,13 +197,13 @@ export default function MyShifts({ user }) {
                     flexDirection: 'column',
                     alignItems: 'center',
                     textAlign: 'center',
-                    opacity: shift.status === 'canceled' ? 0.7 : 1,
+                    opacity: shift.status === 'canceled' || shiftEnded ? 0.7 : 1,
                     color: darkMode ? '#e0e0e0' : '#181818',
                   }}
                 >
                   <div style={{ fontWeight: 600, fontSize: '1.08rem', marginBottom: 2 }}>{formatDateHuman(shift.date)}</div>
                   <div style={{ color: '#888', marginBottom: 6 }}>{formatTimeHuman(shift.start_time)} to {formatTimeHuman(shift.end_time)}</div>
-                  {shift.status === 'booked' && (
+                  {shift.status === 'booked' && !shiftEnded && (
                     <button
                       style={{
                         marginTop: 4,
@@ -182,15 +223,18 @@ export default function MyShifts({ user }) {
                       Cancel
                     </button>
                   )}
+                  {shift.status === 'booked' && shiftEnded && (
+                    <span style={{ color: '#888', fontWeight: 500, fontSize: '0.98rem' }}>Completed</span>
+                  )}
                   {shift.status === 'canceled' && (
                     <span style={{ color: '#a00', fontWeight: 500, fontSize: '0.98rem' }}>Canceled</span>
                   )}
                 </li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
+              );
+            })}
+          </ul>
+        </div>
+      )}
       <ConfirmModal
         open={modal.open}
         onClose={() => setModal({ open: false, bookingId: null, label: '' })}
