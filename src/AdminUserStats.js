@@ -62,23 +62,20 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
         // Calculate stats per user
         const statsMap = {};
         usersData.forEach(u => {
-          statsMap[u.id] = { email: u.email, hoursWorked: 0, hoursBooked: 0, booked: 0, cancellations: 0 };
+          statsMap[u.id] = { email: u.email, shiftsWorked: 0, shiftsBooked: 0, cancellations: 0 };
         });
-        const today = new Date();
+        const todayStr = new Date().toISOString().slice(0, 10);
         bookings.forEach(b => {
           if (!statsMap[b.user_id]) return;
-          const start = parseInt(b.start_time.split(':')[0], 10);
-          const end = parseInt(b.end_time.split(':')[0], 10);
-          const shiftHours = end - start;
           // Parse booking date
           const bookingDateStr = b.date;
-          const todayStr = today.toISOString().slice(0, 10);
           if (b.status === 'booked') {
-            statsMap[b.user_id].booked++;
             if (bookingDateStr < todayStr) {
-              statsMap[b.user_id].hoursWorked += shiftHours;
+              // Past completed shifts
+              statsMap[b.user_id].shiftsWorked++;
             } else {
-              statsMap[b.user_id].hoursBooked += shiftHours;
+              // Future booked shifts
+              statsMap[b.user_id].shiftsBooked++;
             }
           } else if (b.status === 'canceled') {
             statsMap[b.user_id].cancellations++;
@@ -234,8 +231,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
         <thead>
           <tr>
             <th>Name</th>
-            <th>Hours Worked</th>
-            <th>Hours Booked</th>
+            <th>Shifts Worked</th>
             <th>Shifts Booked</th>
             <th>Cancellations</th>
           </tr>
@@ -244,9 +240,8 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
           {users.map(u => (
             <tr key={u.id}>
               <td>{stats[u.id]?.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}</td>
-              <td>{stats[u.id]?.hoursWorked || 0}</td>
-              <td>{stats[u.id]?.hoursBooked || 0}</td>
-              <td>{stats[u.id]?.booked || 0}</td>
+              <td>{stats[u.id]?.shiftsWorked || 0}</td>
+              <td>{stats[u.id]?.shiftsBooked || 0}</td>
               <td>{stats[u.id]?.cancellations || 0}</td>
             </tr>
           ))}

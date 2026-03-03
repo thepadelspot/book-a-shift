@@ -40,18 +40,8 @@ export function generateMonthlyPayePDF(users, bookings, month, year) {
     const futureShifts = userBookings.filter(b => b.date >= today);
 
     // Calculate summary stats
-    const totalHoursWorked = workedShifts.reduce((sum, b) => {
-      const start = parseInt(b.start_time.split(':')[0], 10);
-      const end = parseInt(b.end_time.split(':')[0], 10);
-      return sum + (end - start);
-    }, 0);
-
-    const totalHoursBooked = futureShifts.reduce((sum, b) => {
-      const start = parseInt(b.start_time.split(':')[0], 10);
-      const end = parseInt(b.end_time.split(':')[0], 10);
-      return sum + (end - start);
-    }, 0);
-
+    const totalShiftsWorked = workedShifts.length;
+    const totalShiftsBooked = futureShifts.length;
     const totalShifts = userBookings.length;
 
     // User display name
@@ -81,8 +71,8 @@ export function generateMonthlyPayePDF(users, bookings, month, year) {
     doc.text('SUMMARY:', 20, 62);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(`Total Hours Worked: ${totalHoursWorked}`, 20, 68);
-    doc.text(`Total Hours Booked (Future): ${totalHoursBooked}`, 20, 74);
+    doc.text(`Total Shifts Worked: ${totalShiftsWorked}`, 20, 68);
+    doc.text(`Total Shifts Booked (Future): ${totalShiftsBooked}`, 20, 74);
     doc.text(`Total Shifts: ${totalShifts}`, 20, 80);
 
     let currentY = 88;
