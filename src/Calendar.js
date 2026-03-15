@@ -1,4 +1,3 @@
-import React from 'react';
 
 const getDaysInMonth = (year, month) => {
   return new Date(year, month + 1, 0).getDate();
@@ -8,10 +7,10 @@ const getDaysInMonth = (year, month) => {
 
 const Calendar = ({ year, month, renderDay, darkMode }) => {
   const daysInMonth = getDaysInMonth(year, month);
-  const firstDay = new Date(year, month, 1).getDay();
+  const firstDay = (new Date(year, month, 1).getDay() + 6) % 7; // 0=Mon, 6=Sun
   const isMobile = window.innerWidth <= 700;
   const columns = isMobile ? 3 : 7;
-  const weekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const weekLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   const weeks = [];
   let days = [];
