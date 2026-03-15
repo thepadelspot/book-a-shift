@@ -39,7 +39,7 @@ const Calendar = ({ year, month, renderDay, darkMode }) => {
       }
       if (isMobile) {
         // Calculate the correct weekday for this visible day
-        const weekDayIdx = new Date(year, month, dayNum).getDay();
+        const weekDayIdx = (new Date(year, month, dayNum).getDay() + 6) % 7;
         content = (
           <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
             <span style={{fontSize:'0.95em',fontWeight:600,marginBottom:2,color:'#007bff'}}>{weekLabels[weekDayIdx]}</span>
