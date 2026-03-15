@@ -12,7 +12,8 @@ const Navbar = ({ onNavigate, currentPage, darkMode, isAdmin }) => {
     <button key="myshifts" onClick={() => onNavigate('myshifts')} className={`navbar-btn${darkMode ? ' dark-mode' : ''} ${currentPage === 'myshifts' ? 'active' : ''}`}>My Shifts</button>,
     ...(isAdmin ? [
       <button key="closed" onClick={() => onNavigate('closed')} className={`navbar-btn${darkMode ? ' dark-mode' : ''} ${currentPage === 'closed' ? 'active' : ''}`}>Closed Days</button>,
-      <button key="adminstats" onClick={() => onNavigate('adminstats')} className={`navbar-btn${darkMode ? ' dark-mode' : ''} ${currentPage === 'adminstats' ? 'active' : ''}`}>User Stats</button>
+      <button key="adminstats" onClick={() => onNavigate('adminstats')} className={`navbar-btn${darkMode ? ' dark-mode' : ''} ${currentPage === 'adminstats' ? 'active' : ''}`}>User Stats</button>,
+      <button key="shiftconfig" onClick={() => onNavigate('shiftconfig')} className={`navbar-btn${darkMode ? ' dark-mode' : ''} ${currentPage === 'shiftconfig' ? 'active' : ''}`}>Shift Config</button>,
     ] : []),
     <button key="logout" onClick={logout} className={`navbar-btn${darkMode ? ' dark-mode' : ''}`}>Logout</button>
   ];

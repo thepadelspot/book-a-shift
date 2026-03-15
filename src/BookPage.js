@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Calendar from './Calendar';
-import { fetchBookings, fetchClosedDays, bookShift, cancelShift } from './api';
+import { fetchBookings, fetchClosedDays, bookShift, cancelShift, fetchShiftTemplates, fetchShiftOverrides } from './api';
 import { supabase } from './supabaseClient';
 import AdminClosedDays from './AdminClosedDays';
 import AdminUserStats from './AdminUserStats';
 import ConfirmModal from './ConfirmModal';
+import { buildShiftConfigMap, formatShiftTime, computeEndTime, decimalHourToTimeStr, startTimeToDecimal } from './utils/shiftConfig';
 
-const HOURS = [7, 11, 15, 19]; // 8am, 12pm, 4pm, 8pm
+// Compute duration in hours from stored start_time / end_time strings (handles midnight crossing)
+function bookingDuration(start_time, end_time) {
+  const s = startTimeToDecimal(start_time);
+  const e = startTimeToDecimal(end_time);
+  return e > s ? e - s : 24 - s + e;
+}
 
 // For demo, store bookings in state
 const initialBookings = {};
@@ -47,9 +53,10 @@ const BookPage = ({ user, darkMode }) => {
     return () => { isMounted = false; };
   }, [user]);
   const [bookings, setBookings] = useState({});
-  const [modal, setModal] = useState({ open: false, dateKey: null, hour: null });
+  const [shiftConfig, setShiftConfig] = useState({});
+  const [modal, setModal] = useState({ open: false, dateKey: null, hour: null, duration: 4 });
   const [adminBookUserId, setAdminBookUserId] = useState('');
-  const [cancelModal, setCancelModal] = useState({ open: false, dateKey: null, hour: null });
+  const [cancelModal, setCancelModal] = useState({ open: false, dateKey: null, hour: null, duration: 4 });
   const userStatsRef = useRef();
   const [closedDays, setClosedDays] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -69,20 +76,23 @@ const BookPage = ({ user, darkMode }) => {
     setError('');
     Promise.all([
       fetchBookings(year, month),
-      fetchClosedDays(year, month)
-    ]).then(([bookingsData, closedDaysData]) => {
+      fetchClosedDays(year, month),
+      fetchShiftTemplates(),
+      fetchShiftOverrides(year, month),
+    ]).then(([bookingsData, closedDaysData, templates, overrides]) => {
       if (!isMounted) return;
       // Transform bookings to { [dateKey]: { [hour]: { bookingId, userId, status } } }
       const bookingsMap = {};
       bookingsData.forEach(b => {
         if (b.status !== 'booked') return;
         const dateKey = b.date;
-        const hour = parseInt(b.start_time.split(':')[0], 10);
+        const hour = startTimeToDecimal(b.start_time);
         if (!bookingsMap[dateKey]) bookingsMap[dateKey] = {};
-        bookingsMap[dateKey][hour] = { bookingId: b.id, userId: b.user_id };
+        bookingsMap[dateKey][hour] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time) };
       });
       setBookings(bookingsMap);
       setClosedDays(closedDaysData.map(d => d.date));
+      setShiftConfig(buildShiftConfigMap(year, month, templates, overrides));
       setLoading(false);
     }).catch(e => {
       setError('Failed to load data');
@@ -91,7 +101,7 @@ const BookPage = ({ user, darkMode }) => {
     return () => { isMounted = false; };
   }, [year, month]);
 
-  const handleBook = (dateKey, hour) => {
+  const handleBook = (dateKey, hour, duration) => {
     if (isAdmin) {
       // Multi-select: toggle selection
       setSelectedShifts(prev => {
@@ -99,26 +109,26 @@ const BookPage = ({ user, darkMode }) => {
         if (exists) {
           return prev.filter(s => !(s.dateKey === dateKey && s.hour === hour));
         } else {
-          return [...prev, { dateKey, hour }];
+          return [...prev, { dateKey, hour, duration }];
         }
       });
       setAdminBookUserId(user.id); // default to self
     } else {
-      setModal({ open: true, dateKey, hour });
+      setModal({ open: true, dateKey, hour, duration });
     }
   };
 
-  const handleCancelClick = (dateKey, hour) => {
-    setCancelModal({ open: true, dateKey, hour });
+  const handleCancelClick = (dateKey, hour, duration) => {
+    setCancelModal({ open: true, dateKey, hour, duration });
   };
 
   const confirmBook = async () => {
     setError('');
-    setModal({ open: false, dateKey: null, hour: null });
-    const { dateKey, hour } = modal;
+    setModal({ open: false, dateKey: null, hour: null, duration: 4 });
+    const { dateKey, hour, duration } = modal;
     try {
-      const start_time = `${String(hour).padStart(2, '0')}:00:00`;
-      const end_time = `${String(hour+4).padStart(2, '0')}:00:00`;
+      const start_time = decimalHourToTimeStr(hour);
+      const end_time = computeEndTime(hour, duration);
       const bookingUserId = isAdmin ? adminBookUserId : user.id;
       await bookShift({
         user_id: bookingUserId,
@@ -134,7 +144,7 @@ const BookPage = ({ user, darkMode }) => {
         const dKey = b.date;
         const h = parseInt(b.start_time.split(':')[0], 10);
         if (!bookingsMap[dKey]) bookingsMap[dKey] = {};
-        bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id };
+        bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time) };
       });
       setBookings(bookingsMap);
       if (userStatsRef.current && userStatsRef.current.refresh) userStatsRef.current.refresh();
@@ -157,7 +167,7 @@ const BookPage = ({ user, darkMode }) => {
         const dKey = b.date;
         const h = parseInt(b.start_time.split(':')[0], 10);
         if (!bookingsMap[dKey]) bookingsMap[dKey] = {};
-        bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id };
+        bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time) };
       });
       setBookings(bookingsMap);
       if (userStatsRef.current && userStatsRef.current.refresh) userStatsRef.current.refresh();
@@ -169,7 +179,7 @@ const BookPage = ({ user, darkMode }) => {
   const confirmCancel = async () => {
     if (!cancelModal.dateKey || cancelModal.hour == null) return;
     await handleCancel(cancelModal.dateKey, cancelModal.hour);
-    setCancelModal({ open: false, dateKey: null, hour: null });
+    setCancelModal({ open: false, dateKey: null, hour: null, duration: 4 });
   };
 
   const renderDay = (day) => {
@@ -180,7 +190,7 @@ const BookPage = ({ user, darkMode }) => {
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const isPastDay = slotDate < todayDate;
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 700;
-    if (isMobile && isPastDay) {
+    if (isMobile && isPastDay && !isAdmin) {
       return null;
     }
     if (closedDays.includes(dateKey)) {
@@ -191,15 +201,23 @@ const BookPage = ({ user, darkMode }) => {
         </div>
       );
     }
+    const configSlots = shiftConfig[dateKey] || [];
+    const configuredHours = new Set(configSlots.map(s => parseFloat(s.start_hour)));
+    // Any booking whose start_hour isn't in the current config is "orphaned" — still show it
+    const orphanedSlots = Object.entries(bookings[dateKey] || {})
+      .filter(([h]) => !configuredHours.has(parseFloat(h)))
+      .map(([h, b]) => ({ start_hour: parseFloat(h), duration_hours: b.duration, orphaned: true }));
+    const daySlots = [...configSlots, ...orphanedSlots].sort((a, b) => a.start_hour - b.start_hour);
     return (
       <div className={`day-block${darkMode ? ' dark-mode' : ''}`}>
         <div className="date-label">{day}</div>
         <div className="shifts">
-          {HOURS.map(hour => {
+          {daySlots.map(slot => {
+            const { start_hour: hour, duration_hours: duration, orphaned } = slot;
             const booking = bookings[dateKey]?.[hour];
             const isMine = booking && booking.userId === user.id;
             let isPastSlot = isPastDay;
-            if (!isPastDay && slotDate.getTime() === todayDate.getTime() && hour < now.getHours()) {
+            if (!isPastDay && slotDate.getTime() === todayDate.getTime() && hour < now.getHours() + now.getMinutes() / 60) {
               isPastSlot = true;
             }
             let bookedBy = null;
@@ -208,22 +226,20 @@ const BookPage = ({ user, darkMode }) => {
               bookedBy = `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email;
             }
             const canCancel = isMine || isAdmin;
-            // Multi-select highlight for admins
             const isSelected = isAdmin && !booking && selectedShifts.some(s => s.dateKey === dateKey && s.hour === hour);
             return (
               <div key={hour} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <button
                   className={`shift-btn ${booking ? (isMine ? 'mine' : 'booked') : 'available'}${isMine ? ' orange' : ''}${isPastSlot ? ' disabled' : ''}${isSelected ? ' selected' : ''}${darkMode ? ' dark-mode' : ''}`}
-                  disabled={(booking && !isMine && !isAdmin) || isPastSlot}
-                  onClick={() => booking ? (canCancel ? handleCancelClick(dateKey, hour) : null) : handleBook(dateKey, hour)}
-                  style={isSelected ? { border: '2px solid #2ecc40', boxShadow: '0 0 6px #2ecc40' } : {}}
+                  disabled={(booking && !isMine && !isAdmin) || (isPastSlot && !isAdmin) || orphaned}
+                  onClick={() => booking ? (canCancel ? handleCancelClick(dateKey, hour, duration) : null) : (!orphaned ? handleBook(dateKey, hour, duration) : null)}
+                  style={isSelected ? { border: '2px solid #2ecc40', boxShadow: '0 0 6px #2ecc40' } : orphaned ? { opacity: 0.6, fontStyle: 'italic' } : {}}
+                  title={orphaned ? 'Slot removed from schedule — existing booking still shown' : undefined}
                 >
-                  {`${hour}:00 - ${hour+4}:00`}
+                  {formatShiftTime(hour, duration)}
                 </button>
-                {bookedBy && (
-                  isAdmin && (
-                    <span style={{ fontSize: '0.92em', color: '#888', marginTop: 2 }}>Booked by: {bookedBy}</span>
-                  )
+                {bookedBy && isAdmin && (
+                  <span style={{ fontSize: '0.92em', color: '#888', marginTop: 2 }}>Booked by: {bookedBy}</span>
                 )}
               </div>
             );
@@ -261,29 +277,26 @@ const BookPage = ({ user, darkMode }) => {
         setBlockLoading(false);
         return;
       }
-      // For each 4-hour slot in the range, book a shift
-      let curr = new Date(start);
-      while (curr < end) {
-        const slotHour = curr.getHours();
-        // Only block if slot matches one of the defined HOURS
-        if (HOURS.includes(slotHour)) {
-          const slotDate = curr.toISOString().slice(0, 10);
-          const slotStart = `${String(slotHour).padStart(2, '0')}:00:00`;
-          const slotEnd = `${String(slotHour+4).padStart(2, '0')}:00:00`;
-          await bookShift({
-            user_id: blockUserId,
-            date: slotDate,
-            start_time: slotStart,
-            end_time: slotEnd
-          });
+      // For each date in the range, book configured slots that fall within the time window
+      let currDate = new Date(start);
+      currDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(end);
+      endDate.setHours(23, 59, 59, 999);
+      while (currDate <= endDate) {
+        const dateKey = currDate.toISOString().slice(0, 10);
+        const daySlots = shiftConfig[dateKey] || [];
+        for (const slot of daySlots) {
+          const slotStart = new Date(`${dateKey}T${decimalHourToTimeStr(slot.start_hour).slice(0, 5)}`);
+          if (slotStart >= start && slotStart < end) {
+            await bookShift({
+              user_id: blockUserId,
+              date: dateKey,
+              start_time: decimalHourToTimeStr(slot.start_hour),
+              end_time: computeEndTime(slot.start_hour, slot.duration_hours),
+            });
+          }
         }
-        // Move to next slot (4 hours)
-        curr.setHours(curr.getHours() + 4);
-        // If we cross midnight, set to next day at 7am
-        if (curr.getHours() >= 23) {
-          curr.setDate(curr.getDate() + 1);
-          curr.setHours(HOURS[0]);
-        }
+        currDate.setDate(currDate.getDate() + 1);
       }
       setBlockUserId('');
       setBlockStartDate('');
@@ -298,7 +311,7 @@ const BookPage = ({ user, darkMode }) => {
         const dKey = b.date;
         const h = parseInt(b.start_time.split(':')[0], 10);
         if (!bookingsMap[dKey]) bookingsMap[dKey] = {};
-        bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id };
+        bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time) };
       });
       setBookings(bookingsMap);
     } catch (e) {
@@ -339,9 +352,9 @@ const BookPage = ({ user, darkMode }) => {
         open={modal.open}
         onClose={() => setModal({ open: false, dateKey: null, hour: null })}
         onConfirm={confirmBook}
-        message={modal.dateKey && modal.hour ? (
+        message={modal.dateKey && modal.hour != null ? (
           <div>
-            {`Book shift on ${formatDateHuman(modal.dateKey)} from ${modal.hour}:00 to ${modal.hour+4}:00?`}
+            {`Book shift on ${formatDateHuman(modal.dateKey)}: ${formatShiftTime(modal.hour, modal.duration)}?`}
             {isAdmin && (
               <div style={{ marginTop: 12 }}>
                 <label htmlFor="admin-book-user" style={{ marginRight: 8 }}>For user:</label>
@@ -365,7 +378,7 @@ const BookPage = ({ user, darkMode }) => {
         open={cancelModal.open}
         onClose={() => setCancelModal({ open: false, dateKey: null, hour: null })}
         onConfirm={confirmCancel}
-        message={cancelModal.dateKey && cancelModal.hour != null ? `Cancel shift on ${formatDateHuman(cancelModal.dateKey)} from ${cancelModal.hour}:00 to ${cancelModal.hour+4}:00?` : ''}
+        message={cancelModal.dateKey && cancelModal.hour != null ? `Cancel shift on ${formatDateHuman(cancelModal.dateKey)}: ${formatShiftTime(cancelModal.hour, cancelModal.duration)}?` : ''}
         darkMode={darkMode}
       />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
@@ -409,8 +422,8 @@ const BookPage = ({ user, darkMode }) => {
               setError('');
               try {
                 for (const s of selectedShifts) {
-                  const start_time = `${String(s.hour).padStart(2, '0')}:00:00`;
-                  const end_time = `${String(s.hour+4).padStart(2, '0')}:00:00`;
+                  const start_time = decimalHourToTimeStr(s.hour);
+                  const end_time = computeEndTime(s.hour, s.duration);
                   await bookShift({
                     user_id: adminBookUserId,
                     date: s.dateKey,
@@ -427,7 +440,7 @@ const BookPage = ({ user, darkMode }) => {
                   const dKey = b.date;
                   const h = parseInt(b.start_time.split(':')[0], 10);
                   if (!bookingsMap[dKey]) bookingsMap[dKey] = {};
-                  bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id };
+                  bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time) };
                 });
                 setBookings(bookingsMap);
                 if (userStatsRef.current && userStatsRef.current.refresh) userStatsRef.current.refresh();

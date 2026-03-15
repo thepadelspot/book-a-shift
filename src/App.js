@@ -11,6 +11,7 @@ import Navbar from './Navbar';
 import horizontalLogo from './assets/landscape.png';
 import AdminClosedDays from './AdminClosedDays';
 import AdminUserStats from './AdminUserStats';
+import AdminShiftConfig from './AdminShiftConfig';
 
 import MyShifts from './MyShifts';
 
@@ -95,6 +96,12 @@ const AppContent = () => {
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           <h2>All User Stats</h2>
           <AdminUserStats year={new Date().getFullYear()} month={new Date().getMonth()} darkMode={darkMode} isAdmin={isAdmin} />
+        </div>
+      )}
+      {isAdmin && page === 'shiftconfig' && (
+        <div style={{ maxWidth: 700, margin: '0 auto' }}>
+          <h2>Shift Configuration</h2>
+          <AdminShiftConfig darkMode={darkMode} />
         </div>
       )}
     </div>

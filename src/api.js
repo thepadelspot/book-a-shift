@@ -65,3 +65,96 @@ export async function cancelShift(booking_id) {
   if (error) throw error;
   return data;
 }
+
+// --- Shift configuration ---
+
+// Fetch all weekly shift templates
+export async function fetchShiftTemplates() {
+  const { data, error } = await supabase
+    .from('shift_templates')
+    .select('*')
+    .order('day_of_week')
+    .order('start_hour');
+  if (error) throw error;
+  return data;
+}
+
+// Fetch shift overrides for a specific month
+export async function fetchShiftOverrides(year, month) {
+  const fromDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const toDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  const { data, error } = await supabase
+    .from('shift_overrides')
+    .select('*')
+    .gte('date', fromDate)
+    .lte('date', toDate)
+    .order('date')
+    .order('start_hour');
+  if (error) throw error;
+  return data;
+}
+
+// Fetch shift overrides within an arbitrary date range (used by block-shift booking)
+export async function fetchShiftOverridesByDateRange(startDate, endDate) {
+  const { data, error } = await supabase
+    .from('shift_overrides')
+    .select('*')
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date')
+    .order('start_hour');
+  if (error) throw error;
+  return data;
+}
+
+// Fetch all upcoming shift overrides (from today onwards, for admin panel)
+export async function fetchUpcomingShiftOverrides() {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('shift_overrides')
+    .select('*')
+    .gte('date', today)
+    .order('date')
+    .order('start_hour');
+  if (error) throw error;
+  return data;
+}
+
+// Add a slot to the weekly template
+export async function addShiftTemplate(day_of_week, start_hour, duration_hours) {
+  const { data, error } = await supabase
+    .from('shift_templates')
+    .insert([{ day_of_week, start_hour, duration_hours }])
+    .select();
+  if (error) throw error;
+  return data[0];
+}
+
+// Remove a slot from the weekly template
+export async function deleteShiftTemplate(id) {
+  const { error } = await supabase.from('shift_templates').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// Add a shift override slot for a specific date
+export async function addShiftOverride(date, start_hour, duration_hours) {
+  const { data, error } = await supabase
+    .from('shift_overrides')
+    .insert([{ date, start_hour, duration_hours }])
+    .select();
+  if (error) throw error;
+  return data[0];
+}
+
+// Remove a single shift override slot
+export async function deleteShiftOverride(id) {
+  const { error } = await supabase.from('shift_overrides').delete().eq('id', id);
+  if (error) throw error;
+}
+
+// Remove ALL override slots for a date (resets that date back to the weekly template)
+export async function deleteShiftOverridesForDate(date) {
+  const { error } = await supabase.from('shift_overrides').delete().eq('date', date);
+  if (error) throw error;
+}

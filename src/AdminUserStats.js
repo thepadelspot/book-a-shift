@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import { generateMonthlyPayePDF } from './utils/pdfExport';
+import { fetchShiftTemplates, fetchShiftOverridesByDateRange } from './api';
+import { buildShiftConfigMap, computeEndTime, decimalHourToTimeStr } from './utils/shiftConfig';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -62,20 +64,21 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
         // Calculate stats per user
         const statsMap = {};
         usersData.forEach(u => {
-          statsMap[u.id] = { email: u.email, shiftsWorked: 0, shiftsBooked: 0, cancellations: 0 };
+          statsMap[u.id] = { email: u.email, hoursWorked: 0, hoursBooked: 0, cancellations: 0 };
         });
         const todayStr = new Date().toISOString().slice(0, 10);
         bookings.forEach(b => {
           if (!statsMap[b.user_id]) return;
-          // Parse booking date
-          const bookingDateStr = b.date;
+          const [sh, sm] = b.start_time.split(':').map(Number);
+          const [eh, em] = b.end_time.split(':').map(Number);
+          const s = sh + sm / 60;
+          const e = eh + em / 60;
+          const hours = e > s ? e - s : 24 - s + e;
           if (b.status === 'booked') {
-            if (bookingDateStr < todayStr) {
-              // Past completed shifts
-              statsMap[b.user_id].shiftsWorked++;
+            if (b.date < todayStr) {
+              statsMap[b.user_id].hoursWorked += hours;
             } else {
-              // Future booked shifts
-              statsMap[b.user_id].shiftsBooked++;
+              statsMap[b.user_id].hoursBooked += hours;
             }
           } else if (b.status === 'canceled') {
             statsMap[b.user_id].cancellations++;
@@ -142,24 +145,48 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
         setBlockLoading(false);
         return;
       }
-      // For each 4-hour slot in the range, book a shift
-      const HOURS = [7, 11, 15, 19];
-      let curr = new Date(start);
-      while (curr < end) {
-        const slotHour = curr.getHours();
-        if (HOURS.includes(slotHour)) {
-          const slotDate = curr.toISOString().slice(0, 10);
-          const slotStart = `${String(slotHour).padStart(2, '0')}:00:00`;
-          const slotEnd = `${String(slotHour+4).padStart(2, '0')}:00:00`;
-          await supabase.from('bookings').insert([
-            { user_id: blockUserId, date: slotDate, start_time: slotStart, end_time: slotEnd, status: 'booked' }
-          ]);
+      // Fetch shift config for the date range, then book matching slots
+      const startDateStr = blockStartDate;
+      const endDateStr = blockEndDate;
+      const [templates, overrides] = await Promise.all([
+        fetchShiftTemplates(),
+        fetchShiftOverridesByDateRange(startDateStr, endDateStr),
+      ]);
+      // Build a config map spanning all months in the range
+      const startYear = start.getFullYear();
+      const startMonth = start.getMonth();
+      const endYear = end.getFullYear();
+      const endMonth = end.getMonth();
+      let configMap = {};
+      for (let y = startYear, m = startMonth; y < endYear || (y === endYear && m <= endMonth); ) {
+        const monthOverrides = overrides.filter(o => {
+          const d = new Date(o.date);
+          return d.getFullYear() === y && d.getMonth() === m;
+        });
+        Object.assign(configMap, buildShiftConfigMap(y, m, templates, monthOverrides));
+        m++;
+        if (m > 11) { m = 0; y++; }
+      }
+      let currDate = new Date(start);
+      currDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(end);
+      endDate.setHours(23, 59, 59, 999);
+      while (currDate <= endDate) {
+        const dateKey = currDate.toISOString().slice(0, 10);
+        const daySlots = configMap[dateKey] || [];
+        for (const slot of daySlots) {
+          const slotStart = new Date(`${dateKey}T${decimalHourToTimeStr(slot.start_hour).slice(0, 5)}`);
+          if (slotStart >= start && slotStart < end) {
+            await supabase.from('bookings').insert([{
+              user_id: blockUserId,
+              date: dateKey,
+              start_time: decimalHourToTimeStr(slot.start_hour),
+              end_time: computeEndTime(slot.start_hour, slot.duration_hours),
+              status: 'booked',
+            }]);
+          }
         }
-        curr.setHours(curr.getHours() + 4);
-        if (curr.getHours() >= 23) {
-          curr.setDate(curr.getDate() + 1);
-          curr.setHours(HOURS[0]);
-        }
+        currDate.setDate(currDate.getDate() + 1);
       }
       setBlockUserId('');
       setBlockStartDate('');
@@ -231,8 +258,8 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
         <thead>
           <tr>
             <th>Name</th>
-            <th>Shifts Worked</th>
-            <th>Shifts Booked</th>
+            <th>Hours Worked</th>
+            <th>Hours Booked</th>
             <th>Cancellations</th>
           </tr>
         </thead>
@@ -240,8 +267,8 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
           {users.map(u => (
             <tr key={u.id}>
               <td>{stats[u.id]?.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}</td>
-              <td>{stats[u.id]?.shiftsWorked || 0}</td>
-              <td>{stats[u.id]?.shiftsBooked || 0}</td>
+              <td>{stats[u.id]?.hoursWorked || 0}</td>
+              <td>{stats[u.id]?.hoursBooked || 0}</td>
               <td>{stats[u.id]?.cancellations || 0}</td>
             </tr>
           ))}

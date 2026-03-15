@@ -39,10 +39,12 @@ export function generateMonthlyPayePDF(users, bookings, month, year) {
     const workedShifts = userBookings.filter(b => b.date < today);
     const futureShifts = userBookings.filter(b => b.date >= today);
 
-    // Calculate summary stats
-    const totalShiftsWorked = workedShifts.length;
-    const totalShiftsBooked = futureShifts.length;
-    const totalShifts = userBookings.length;
+    // Calculate summary stats (in hours)
+    const timeToHours = (t) => { const [h, m] = t.split(':').map(Number); return h + m / 60; };
+    const shiftHours = (b) => { const s = timeToHours(b.start_time); const e = timeToHours(b.end_time); return e > s ? e - s : 24 - s + e; };
+    const totalHoursWorked = workedShifts.reduce((sum, b) => sum + shiftHours(b), 0);
+    const totalHoursBooked = futureShifts.reduce((sum, b) => sum + shiftHours(b), 0);
+    const totalHours = totalHoursWorked + totalHoursBooked;
 
     // User display name
     const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
@@ -71,9 +73,9 @@ export function generateMonthlyPayePDF(users, bookings, month, year) {
     doc.text('SUMMARY:', 20, 62);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(`Total Shifts Worked: ${totalShiftsWorked}`, 20, 68);
-    doc.text(`Total Shifts Booked (Future): ${totalShiftsBooked}`, 20, 74);
-    doc.text(`Total Shifts: ${totalShifts}`, 20, 80);
+    doc.text(`Total Hours Worked: ${+totalHoursWorked.toFixed(1)}h`, 20, 68);
+    doc.text(`Total Hours Booked (Future): ${+totalHoursBooked.toFixed(1)}h`, 20, 74);
+    doc.text(`Total Hours: ${+totalHours.toFixed(1)}h`, 20, 80);
 
     let currentY = 88;
 
@@ -88,7 +90,7 @@ export function generateMonthlyPayePDF(users, bookings, month, year) {
         formatDateShort(shift.date),
         getDayOfWeek(shift.date),
         formatTimeRange(shift.start_time, shift.end_time),
-        (parseInt(shift.end_time.split(':')[0], 10) - parseInt(shift.start_time.split(':')[0], 10)).toString()
+        (+shiftHours(shift).toFixed(1)) + 'h'
       ]);
 
       autoTable(doc, {
@@ -132,7 +134,7 @@ export function generateMonthlyPayePDF(users, bookings, month, year) {
         formatDateShort(shift.date),
         getDayOfWeek(shift.date),
         formatTimeRange(shift.start_time, shift.end_time),
-        (parseInt(shift.end_time.split(':')[0], 10) - parseInt(shift.start_time.split(':')[0], 10)).toString()
+        (+shiftHours(shift).toFixed(1)) + 'h'
       ]);
 
       autoTable(doc, {
