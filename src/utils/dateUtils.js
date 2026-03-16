@@ -60,9 +60,9 @@ export function formatTimeHuman(timeStr) {
 // Format time range as "08:00-12:00"
 export function formatTimeRange(startTime, endTime) {
   if (!startTime || !endTime) return '';
-  const [startH] = startTime.split(':');
-  const [endH] = endTime.split(':');
-  return `${startH.padStart(2, '0')}:00-${endH.padStart(2, '0')}:00`;
+  const [startH, startM = '00'] = startTime.split(':');
+  const [endH, endM = '00'] = endTime.split(':');
+  return `${startH.padStart(2, '0')}:${startM.padStart(2, '0')}-${endH.padStart(2, '0')}:${endM.padStart(2, '0')}`;
 }
 
 // Get current date formatted as "3rd March 2026"

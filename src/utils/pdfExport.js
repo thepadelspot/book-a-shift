@@ -35,16 +35,13 @@ export function generateMonthlyPayePDF(users, bookings, month, year) {
       return a.start_time.localeCompare(b.start_time);
     });
 
-    // Separate past (worked) and future (booked) shifts
+    // Only worked (past) shifts
     const workedShifts = userBookings.filter(b => b.date < today);
-    const futureShifts = userBookings.filter(b => b.date >= today);
 
     // Calculate summary stats (in hours)
     const timeToHours = (t) => { const [h, m] = t.split(':').map(Number); return h + m / 60; };
     const shiftHours = (b) => { const s = timeToHours(b.start_time); const e = timeToHours(b.end_time); return e > s ? e - s : 24 - s + e; };
     const totalHoursWorked = workedShifts.reduce((sum, b) => sum + shiftHours(b), 0);
-    const totalHoursBooked = futureShifts.reduce((sum, b) => sum + shiftHours(b), 0);
-    const totalHours = totalHoursWorked + totalHoursBooked;
 
     // User display name
     const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
@@ -74,8 +71,6 @@ export function generateMonthlyPayePDF(users, bookings, month, year) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.text(`Total Hours Worked: ${+totalHoursWorked.toFixed(1)}h`, 20, 68);
-    doc.text(`Total Hours Booked (Future): ${+totalHoursBooked.toFixed(1)}h`, 20, 74);
-    doc.text(`Total Hours: ${+totalHours.toFixed(1)}h`, 20, 80);
 
     let currentY = 88;
 
@@ -117,52 +112,16 @@ export function generateMonthlyPayePDF(users, bookings, month, year) {
       currentY += 10;
     }
 
-    // --- Future Shifts Table ---
-    if (futureShifts.length > 0) {
-      // Check if we need a new page
-      if (currentY > 240) {
-        doc.addPage();
-        currentY = 20;
-      }
-
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text('FUTURE SHIFTS (Booked):', 20, currentY);
-      currentY += 6;
-
-      const futureData = futureShifts.map(shift => [
-        formatDateShort(shift.date),
-        getDayOfWeek(shift.date),
-        formatTimeRange(shift.start_time, shift.end_time),
-        (+shiftHours(shift).toFixed(1)) + 'h'
-      ]);
-
-      autoTable(doc, {
-        startY: currentY,
-        head: [['Date', 'Day', 'Time', 'Hours']],
-        body: futureData,
-        theme: 'grid',
-        headStyles: { fillColor: [100, 100, 100], textColor: 255, fontStyle: 'bold' },
-        margin: { left: 20, right: 20 },
-        styles: { fontSize: 9, cellPadding: 3 },
-        columnStyles: {
-          0: { halign: 'left' },
-          1: { halign: 'center' },
-          2: { halign: 'center' },
-          3: { halign: 'center' }
-        }
-      });
-    }
-
-    // --- Page Footer ---
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Page ${i} of ${pageCount}`, 105, 285, { align: 'center' });
-    }
   });
+
+  // --- Page Footers (done after all pages exist so total count is correct) ---
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Page ${i} of ${pageCount}`, 105, 285, { align: 'center' });
+  }
 
   // Save the PDF
   const filename = `PAYE_Shifts_${monthName}_${year}.pdf`;
