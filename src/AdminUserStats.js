@@ -267,12 +267,20 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
           {users.map(u => (
             <tr key={u.id}>
               <td>{stats[u.id]?.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}</td>
-              <td>{stats[u.id]?.hoursWorked || 0}</td>
-              <td>{stats[u.id]?.hoursBooked || 0}</td>
+              <td>{+(stats[u.id]?.hoursWorked || 0).toFixed(2)}</td>
+              <td>{+(stats[u.id]?.hoursBooked || 0).toFixed(2)}</td>
               <td>{stats[u.id]?.cancellations || 0}</td>
             </tr>
           ))}
         </tbody>
+        <tfoot>
+          <tr style={{ fontWeight: 700, borderTop: '2px solid #888' }}>
+            <td>Total</td>
+            <td>{+(users.reduce((sum, u) => sum + (stats[u.id]?.hoursWorked || 0), 0)).toFixed(2)}</td>
+            <td>{+(users.reduce((sum, u) => sum + (stats[u.id]?.hoursBooked || 0), 0)).toFixed(2)}</td>
+            <td>{users.reduce((sum, u) => sum + (stats[u.id]?.cancellations || 0), 0)}</td>
+          </tr>
+        </tfoot>
       </table>
     </div>
   );
