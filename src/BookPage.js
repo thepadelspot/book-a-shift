@@ -190,7 +190,7 @@ const BookPage = ({ user, darkMode }) => {
     const todayDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const isPastDay = slotDate < todayDate;
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 700;
-    if (isMobile && isPastDay && !isAdmin) {
+    if (isMobile && isPastDay) {
       return null;
     }
     if (closedDays.includes(dateKey)) {
@@ -236,7 +236,7 @@ const BookPage = ({ user, darkMode }) => {
                   style={isSelected ? { border: '2px solid #2ecc40', boxShadow: '0 0 6px #2ecc40' } : orphaned ? { opacity: 0.6, fontStyle: 'italic' } : {}}
                   title={orphaned ? 'Slot removed from schedule — existing booking still shown' : undefined}
                 >
-                  {formatShiftTime(hour, duration)}
+                  {formatShiftTime(hour, duration).replace(' (next day)', '')}
                 </button>
                 {bookedBy && isAdmin && (
                   <span style={{ fontSize: '0.92em', color: '#888', marginTop: 2 }}>Booked by: {bookedBy}</span>
