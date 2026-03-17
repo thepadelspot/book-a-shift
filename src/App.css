@@ -15,13 +15,28 @@
 }
 /* Dark mode for user stats and closed days tables */
 .admin-user-stats table.dark-mode, .admin-user-stats.dark-mode table, .closed-days-admin.dark-mode, .closed-days-admin table.dark-mode {
-  background: #23272f !important;
+  background: #000 !important;
   color: #f0f0f0 !important;
 }
 .admin-user-stats.dark-mode td, .admin-user-stats.dark-mode th, .admin-user-stats table.dark-mode td, .admin-user-stats table.dark-mode th {
-  background: #23272f !important;
+  background: #000 !important;
   color: #f0f0f0 !important;
-  border-color: #444 !important;
+  border-color: #1a1a1a !important;
+}
+.admin-user-stats.dark-mode tbody tr {
+  background: #0d0d0d !important;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.6) !important;
+}
+.admin-user-stats.dark-mode tbody tr td {
+  background: #0d0d0d !important;
+}
+.admin-user-stats.dark-mode tfoot tr td {
+  background: #000 !important;
+  color: #f0f0f0 !important;
+}
+.admin-user-stats.dark-mode th {
+  background: #111 !important;
+  color: #a0a8c0 !important;
 }
 .closed-days-admin.dark-mode, .closed-days-admin.dark-mode td, .closed-days-admin.dark-mode th, .closed-days-admin table.dark-mode td, .closed-days-admin table.dark-mode th {
   background: #23272f !important;
@@ -38,9 +53,9 @@
   background: rgba(0,0,0,0.7);
 }
 .modal.dark-mode {
-  background: #23272f;
+  background: #0d0d0d;
   color: #f0f0f0;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.7);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.9);
 }
 /* Modal button dark mode */
 .modal.dark-mode button {
@@ -268,9 +283,9 @@
   align-items: center;
 }
 .login-container.dark-mode {
-  background: #222;
+  background: #0d0d0d;
   color: #e0e0e0;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.8);
 }
 .login-container h2 {
   margin-bottom: 1.5rem;
@@ -310,43 +325,56 @@
   margin-top: 0.5rem;
 }
 body.dark-mode {
-  background: #181818;
+  background: #000;
   color: #e0e0e0;
 }
 
 .App.dark-mode {
-  background: #181818;
+  background: #000;
   color: #e0e0e0;
 }
 
 .calendar.dark-mode {
-  border-color: #333;
+  border-color: #1a1a1a;
 }
-.calendar.dark-mode th, .calendar.dark-mode td {
-  border: 1px solid #333;
-  background: #222;
+.calendar.dark-mode th {
+  border: 1px solid #1a1a1a;
+  background: #0d0d0d;
+  color: #a0a8c0;
+}
+.calendar.dark-mode td {
+  border: 1px solid #111;
+  background: #000;
   color: #e0e0e0;
 }
 .day-block.dark-mode {
-  background: #222;
+  background: #000;
 }
 .shift-btn.available.dark-mode {
-  background: #234d23;
+  background: linear-gradient(90deg, #1a3d1a 60%, #2a5c2a 100%);
   color: #aaffaa;
+  border: 1px solid #2a5c2a;
 }
 .shift-btn.booked.dark-mode {
-  background: #4d2323;
+  background: linear-gradient(90deg, #3d1a1a 60%, #5c2a2a 100%);
   color: #ffaaaa;
+  border: 1px solid #5c2a2a;
 }
 .shift-btn.mine.dark-mode {
-  background: #4d3a23;
+  background: linear-gradient(90deg, #3d2e1a 60%, #5c4520 100%);
   color: #ffe9b3;
+  border: 2px solid #a07030;
+}
+.shift-btn.disabled.dark-mode {
+  background: #2a2a2a !important;
+  color: #555 !important;
+  border: 1px solid #3a3a3a !important;
 }
 .navbar.dark-mode {
-  background: #222;
+  background: #0a0a0a;
 }
 .navbar button.dark-mode {
-  background: #333;
+  background: #111;
   color: #e0e0e0;
 }
 .navbar .active.dark-mode {
