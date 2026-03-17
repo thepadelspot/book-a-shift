@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { MONTHS, formatDateShort, getDayOfWeek, formatTimeRange, getCurrentDateFormatted } from './dateUtils';
+import logoImg from '../assets/landscape.png';
 
 /**
  * Generate a PDF export of all users' shift data for a specific month
@@ -46,39 +47,45 @@ export function generateMonthlyPayePDF(users, bookings, month, year) {
     // User display name
     const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
 
-    // --- PDF Header ---
-    doc.setFontSize(16);
+    // --- PDF Header: black banner with logo ---
+    doc.setFillColor(0, 0, 0);
+    doc.rect(0, 0, 210, 28, 'F');
+    doc.addImage(logoImg, 'PNG', 70, 1, 70, 26);
+
+    // --- Report title ---
+    doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
-    doc.text(`SHIFT BOOKING REPORT - ${monthName.toUpperCase()} ${year}`, 105, 20, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    doc.text(`SHIFT REPORT - ${monthName.toUpperCase()} ${year}`, 105, 36, { align: 'center' });
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Generated: ${getCurrentDateFormatted()}`, 105, 27, { align: 'center' });
+    doc.text(`Generated: ${getCurrentDateFormatted()}`, 105, 42, { align: 'center' });
 
     // --- User Info Section ---
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text(`Employee: ${userName}`, 20, 40);
+    doc.text(`Employee: ${userName}`, 20, 54);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(`Email: ${user.email}`, 20, 46);
-    doc.text(`Period: ${monthName} ${year}`, 20, 52);
+    doc.text(`Email: ${user.email}`, 20, 60);
+    doc.text(`Period: ${monthName} ${year}`, 20, 66);
 
     // --- Summary Section ---
     doc.setFontSize(11);
     doc.setFont('helvetica', 'bold');
-    doc.text('SUMMARY:', 20, 62);
+    doc.text('SUMMARY:', 20, 76);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(`Total Hours Worked: ${+totalHoursWorked.toFixed(1)}h`, 20, 68);
+    doc.text(`Total Hours Worked: ${+totalHoursWorked.toFixed(1)}h`, 20, 82);
 
-    let currentY = 88;
+    let currentY = 95;
 
     // --- Worked Shifts Table ---
     if (workedShifts.length > 0) {
       doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text('WORKED SHIFTS (Past):', 20, currentY);
+      doc.text('WORKED SHIFTS:', 20, currentY);
       currentY += 6;
 
       const workedData = workedShifts.map(shift => [
