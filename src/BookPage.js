@@ -191,7 +191,25 @@ const BookPage = ({ user, darkMode }) => {
     const isPastDay = slotDate < todayDate;
     const isMobile = typeof window !== 'undefined' && window.innerWidth <= 700;
     if (isMobile && isPastDay) {
-      return null;
+      // Keep yesterday visible if an overnight shift is still active right now
+      const yesterday = new Date(todayDate);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const isYesterday = slotDate.getTime() === yesterday.getTime();
+      if (isYesterday) {
+        const nowDecimal = now.getHours() + now.getMinutes() / 60;
+        const hasActiveOvernightShift = Object.entries(bookings[dateKey] || {}).some(([h, b]) => {
+          const startDecimal = parseFloat(h);
+          const endDecimal = startDecimal + b.duration;
+          return endDecimal > 24 && nowDecimal < (endDecimal - 24);
+        });
+        if (hasActiveOvernightShift) {
+          // fall through and render the day
+        } else {
+          return null;
+        }
+      } else {
+        return null;
+      }
     }
     if (closedDays.includes(dateKey)) {
       return (
