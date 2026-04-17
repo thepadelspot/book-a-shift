@@ -56,6 +56,16 @@ export async function bookShift({ user_id, date, start_time, end_time }) {
   return data;
 }
 
+// Update a shift's start/end time
+export async function updateShift(booking_id, start_time, end_time) {
+  const { data, error } = await supabase
+    .from('bookings')
+    .update({ start_time, end_time })
+    .eq('id', booking_id);
+  if (error) throw error;
+  return data;
+}
+
 // Cancel a shift
 export async function cancelShift(booking_id) {
   const { data, error } = await supabase

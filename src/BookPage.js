@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Calendar from './Calendar';
-import { fetchBookings, fetchClosedDays, bookShift, cancelShift, fetchShiftTemplates, fetchShiftOverrides } from './api';
+import { fetchBookings, fetchClosedDays, bookShift, cancelShift, updateShift, fetchShiftTemplates, fetchShiftOverrides } from './api';
 import { supabase } from './supabaseClient';
 import AdminClosedDays from './AdminClosedDays';
 import AdminUserStats from './AdminUserStats';
@@ -57,6 +57,7 @@ const BookPage = ({ user, darkMode }) => {
   const [modal, setModal] = useState({ open: false, dateKey: null, hour: null, duration: 4 });
   const [adminBookUserId, setAdminBookUserId] = useState('');
   const [cancelModal, setCancelModal] = useState({ open: false, dateKey: null, hour: null, duration: 4 });
+  const [editModal, setEditModal] = useState({ open: false, dateKey: null, hour: null, bookingId: null, startTime: '', endTime: '' });
   const userStatsRef = useRef();
   const [closedDays, setClosedDays] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -88,7 +89,7 @@ const BookPage = ({ user, darkMode }) => {
         const dateKey = b.date;
         const hour = startTimeToDecimal(b.start_time);
         if (!bookingsMap[dateKey]) bookingsMap[dateKey] = {};
-        bookingsMap[dateKey][hour] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time) };
+        bookingsMap[dateKey][hour] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time), start_time: b.start_time, end_time: b.end_time };
       });
       setBookings(bookingsMap);
       setClosedDays(closedDaysData.map(d => d.date));
@@ -119,7 +120,66 @@ const BookPage = ({ user, darkMode }) => {
   };
 
   const handleCancelClick = (dateKey, hour, duration) => {
-    setCancelModal({ open: true, dateKey, hour, duration });
+    if (isAdmin) {
+      const booking = bookings[dateKey]?.[hour];
+      setEditModal({
+        open: true,
+        dateKey,
+        hour,
+        bookingId: booking?.bookingId,
+        startTime: (booking?.start_time || decimalHourToTimeStr(hour)).slice(0, 5),
+        endTime: (booking?.end_time || computeEndTime(hour, duration)).slice(0, 5),
+      });
+    } else {
+      setCancelModal({ open: true, dateKey, hour, duration });
+    }
+  };
+
+  const refetchBookings = async () => {
+    const bookingsData = await fetchBookings(year, month);
+    const bookingsMap = {};
+    bookingsData.forEach(b => {
+      if (b.status !== 'booked') return;
+      const dKey = b.date;
+      const h = startTimeToDecimal(b.start_time);
+      if (!bookingsMap[dKey]) bookingsMap[dKey] = {};
+      bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time), start_time: b.start_time, end_time: b.end_time };
+    });
+    setBookings(bookingsMap);
+  };
+
+  const handleEditSave = async () => {
+    setError('');
+    try {
+      await updateShift(editModal.bookingId, editModal.startTime, editModal.endTime);
+      const [sh, sm] = editModal.startTime.split(':').map(Number);
+      const [eh, em] = editModal.endTime.split(':').map(Number);
+      const s = sh + sm / 60;
+      const e = eh + em / 60;
+      const newDuration = e > s ? e - s : 24 - s + e;
+      setBookings(prev => {
+        const day = { ...(prev[editModal.dateKey] || {}) };
+        const existing = day[editModal.hour];
+        if (existing) {
+          day[editModal.hour] = { ...existing, start_time: editModal.startTime, end_time: editModal.endTime, duration: newDuration };
+        }
+        return { ...prev, [editModal.dateKey]: day };
+      });
+      setEditModal({ open: false, dateKey: null, hour: null, bookingId: null, startTime: '', endTime: '' });
+    } catch (e) {
+      setError('Edit failed');
+    }
+  };
+
+  const handleEditCancelShift = async () => {
+    setError('');
+    try {
+      await cancelShift(editModal.bookingId);
+      await refetchBookings();
+      setEditModal({ open: false, dateKey: null, hour: null, bookingId: null, startTime: '', endTime: '' });
+    } catch (e) {
+      setError('Cancel failed');
+    }
   };
 
   const confirmBook = async () => {
@@ -254,7 +314,9 @@ const BookPage = ({ user, darkMode }) => {
                   style={isSelected ? { border: '2px solid #2ecc40', boxShadow: '0 0 6px #2ecc40' } : orphaned ? { opacity: 0.6, fontStyle: 'italic' } : {}}
                   title={orphaned ? 'Slot removed from schedule — existing booking still shown' : undefined}
                 >
-                  {formatShiftTime(hour, duration).replace(' (next day)', '')}
+                  {booking?.start_time
+                    ? `${booking.start_time.slice(0, 5)}–${booking.end_time.slice(0, 5)}`
+                    : formatShiftTime(hour, duration).replace(' (next day)', '')}
                 </button>
                 {bookedBy && isAdmin && (
                   <span style={{ fontSize: '0.92em', color: '#888', marginTop: 2 }}>Booked by: {bookedBy}</span>
@@ -365,6 +427,37 @@ const BookPage = ({ user, darkMode }) => {
 
   return (
     <div>
+      {editModal.open && (
+        <div className={`modal-backdrop${darkMode ? ' dark-mode' : ''}`}>
+          <div className={`modal${darkMode ? ' dark-mode' : ''}`}>
+            <h3 style={{ marginTop: 0 }}>Edit Shift</h3>
+            <div style={{ marginBottom: 12 }}>{formatDateHuman(editModal.dateKey)}</div>
+            <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                Start
+                <input
+                  type="time"
+                  value={editModal.startTime}
+                  onChange={e => setEditModal(m => ({ ...m, startTime: e.target.value }))}
+                />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                End
+                <input
+                  type="time"
+                  value={editModal.endTime}
+                  onChange={e => setEditModal(m => ({ ...m, endTime: e.target.value }))}
+                />
+              </label>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditModal({ open: false, dateKey: null, hour: null, bookingId: null, startTime: '', endTime: '' })}>Close</button>
+              <button onClick={handleEditCancelShift} style={{ background: '#c0392b', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', cursor: 'pointer' }}>Cancel Shift</button>
+              <button onClick={handleEditSave} style={{ background: '#2196f3', color: '#fff', border: 'none', borderRadius: 4, padding: '6px 14px', cursor: 'pointer', fontWeight: 600 }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Admin booking for another user */}
       <ConfirmModal
         open={modal.open}
