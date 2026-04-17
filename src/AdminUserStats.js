@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
-import { generateMonthlyPayePDF } from './utils/pdfExport';
+import { generateMonthlyPayePDF, generateMonthlyFullPDF } from './utils/pdfExport';
 import { fetchShiftTemplates, fetchShiftOverridesByDateRange } from './api';
 import { buildShiftConfigMap, computeEndTime, decimalHourToTimeStr } from './utils/shiftConfig';
 
@@ -40,8 +40,11 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
   const [blockLoading, setBlockLoading] = useState(false);
   const [blockError, setBlockError] = useState('');
 
-  // PDF export state
   const [exporting, setExporting] = useState(false);
+  const [exportingFull, setExportingFull] = useState(false);
+
+  const [hideAdmins, setHideAdmins] = useState(true);
+  const ADMIN_FIRST_NAMES = ['adnan', 'haroon', 'emadul', 'taha', 'azeem'];
 
   // Fetch users and bookings for stats
   useEffect(() => {
@@ -66,7 +69,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
         usersData.forEach(u => {
           statsMap[u.id] = { email: u.email, hoursWorked: 0, hoursBooked: 0, cancellations: 0 };
         });
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const now = new Date();
         bookings.forEach(b => {
           if (!statsMap[b.user_id]) return;
           const [sh, sm] = b.start_time.split(':').map(Number);
@@ -75,7 +78,8 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
           const e = eh + em / 60;
           const hours = e > s ? e - s : 24 - s + e;
           if (b.status === 'booked') {
-            if (b.date < todayStr) {
+            const shiftEnd = new Date(`${b.date}T${b.end_time}`);
+            if (shiftEnd <= now) {
               statsMap[b.user_id].hoursWorked += hours;
             } else {
               statsMap[b.user_id].hoursBooked += hours;
@@ -123,6 +127,27 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
       console.error('PDF generation error:', err);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportFullPDF = async () => {
+    setExportingFull(true);
+    try {
+      const { from, to } = getMonthRange(viewYear, viewMonth);
+      const { data: bookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('*')
+        .gte('date', from)
+        .lte('date', to)
+        .order('date', { ascending: true })
+        .order('start_time', { ascending: true });
+      if (bookingsError) throw bookingsError;
+      generateMonthlyFullPDF(users, bookings, viewMonth, viewYear);
+    } catch (err) {
+      alert('Failed to generate PDF. Please try again.');
+      console.error('PDF generation error:', err);
+    } finally {
+      setExportingFull(false);
     }
   };
 
@@ -246,13 +271,33 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
             Next &gt;
           </button>
         </div>
-        <button
-          className={`export-pdf-btn${darkMode ? ' dark-mode' : ''}`}
-          onClick={handleExportPDF}
-          disabled={exporting || loading}
-        >
-          {exporting ? 'Generating...' : 'Export Month PDF'}
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <button
+            className={`export-pdf-btn${darkMode ? ' dark-mode' : ''}`}
+            onClick={handleExportPDF}
+            disabled={exporting || loading}
+          >
+            {exporting ? 'Generating...' : 'Export Hours Worked PDF'}
+          </button>
+          <button
+            className={`export-pdf-btn${darkMode ? ' dark-mode' : ''}`}
+            onClick={handleExportFullPDF}
+            disabled={exportingFull || loading}
+          >
+            {exportingFull ? 'Generating...' : 'Export Full PDF'}
+          </button>
+        </div>
+      </div>
+      <div style={{ marginBottom: 8 }}>
+        <label style={{ cursor: 'pointer', userSelect: 'none' }}>
+          <input
+            type="checkbox"
+            checked={hideAdmins}
+            onChange={e => setHideAdmins(e.target.checked)}
+            style={{ marginRight: 6 }}
+          />
+          Hide admins
+        </label>
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
@@ -264,22 +309,29 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
           </tr>
         </thead>
         <tbody>
-          {users.map(u => (
-            <tr key={u.id}>
-              <td>{stats[u.id]?.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}</td>
-              <td>{+(stats[u.id]?.hoursWorked || 0).toFixed(2)}</td>
-              <td>{+(stats[u.id]?.hoursBooked || 0).toFixed(2)}</td>
-              <td>{stats[u.id]?.cancellations || 0}</td>
-            </tr>
-          ))}
+          {users
+            .filter(u => !hideAdmins || !ADMIN_FIRST_NAMES.includes((u.firstName || '').toLowerCase()))
+            .map(u => (
+              <tr key={u.id}>
+                <td>{stats[u.id]?.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}</td>
+                <td>{+(stats[u.id]?.hoursWorked || 0).toFixed(2)}</td>
+                <td>{+(stats[u.id]?.hoursBooked || 0).toFixed(2)}</td>
+                <td>{stats[u.id]?.cancellations || 0}</td>
+              </tr>
+            ))}
         </tbody>
         <tfoot>
-          <tr style={{ fontWeight: 700, borderTop: '2px solid #888' }}>
-            <td>Total</td>
-            <td>{+(users.reduce((sum, u) => sum + (stats[u.id]?.hoursWorked || 0), 0)).toFixed(2)}</td>
-            <td>{+(users.reduce((sum, u) => sum + (stats[u.id]?.hoursBooked || 0), 0)).toFixed(2)}</td>
-            <td>{users.reduce((sum, u) => sum + (stats[u.id]?.cancellations || 0), 0)}</td>
-          </tr>
+          {(() => {
+            const visibleUsers = users.filter(u => !hideAdmins || !ADMIN_FIRST_NAMES.includes((u.firstName || '').toLowerCase()));
+            return (
+              <tr style={{ fontWeight: 700, borderTop: '2px solid #888' }}>
+                <td>Total</td>
+                <td>{+(visibleUsers.reduce((sum, u) => sum + (stats[u.id]?.hoursWorked || 0), 0)).toFixed(2)}</td>
+                <td>{+(visibleUsers.reduce((sum, u) => sum + (stats[u.id]?.hoursBooked || 0), 0)).toFixed(2)}</td>
+                <td>{visibleUsers.reduce((sum, u) => sum + (stats[u.id]?.cancellations || 0), 0)}</td>
+              </tr>
+            );
+          })()}
         </tfoot>
       </table>
     </div>
