@@ -3,37 +3,57 @@ import { supabase } from './supabaseClient';
 import { cancelShift } from './api';
 import ConfirmModal from './ConfirmModal';
 
-// Utility function to format date in a human-readable way
-function formatDateHuman(dateStr) {
-  if (!dateStr) return '';
-  const date = new Date(dateStr);
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const dayName = days[date.getDay()];
-  const dayNum = date.getDate();
-  const monthName = months[date.getMonth()];
-  const year = date.getFullYear();
-  function ordinal(n) {
-    if (n > 3 && n < 21) return 'th';
-    switch (n % 10) {
-      case 1: return 'st';
-      case 2: return 'nd';
-      case 3: return 'rd';
-      default: return 'th';
-    }
+function ordinal(n) {
+  if (n > 3 && n < 21) return 'th';
+  switch (n % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
   }
-  return `${dayName} ${dayNum}${ordinal(dayNum)} ${monthName} ${year}`;
 }
 
-// Utility function to format time in a human-readable way
+function formatDateHuman(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr + 'T00:00:00');
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const dayNum = date.getDate();
+  return `${days[date.getDay()]} ${dayNum}${ordinal(dayNum)} ${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
 function formatTimeHuman(timeStr) {
   if (!timeStr) return '';
   const [h] = timeStr.split(':');
   let hour = parseInt(h, 10);
-  let suffix = hour < 12 ? 'am' : 'pm';
+  const suffix = hour < 12 ? 'am' : 'pm';
   if (hour === 0) hour = 12;
   if (hour > 12) hour -= 12;
   return `${hour}${suffix}`;
+}
+
+// Returns the ISO date string (YYYY-MM-DD) for the Monday of the week containing dateStr
+function getWeekStart(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diff);
+  return monday.toISOString().slice(0, 10);
+}
+
+function formatWeekHeader(mondayStr) {
+  const d = new Date(mondayStr + 'T00:00:00');
+  const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const dayNum = d.getDate();
+  return `Week of ${dayNum}${ordinal(dayNum)} ${MONTHS_SHORT[d.getMonth()]}`;
+}
+
+function formatDayShort(dateStr) {
+  const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const d = new Date(dateStr + 'T00:00:00');
+  const dayNum = d.getDate();
+  return `${DAYS_SHORT[d.getDay()]} ${dayNum}${ordinal(dayNum)}`;
 }
 
 const MONTHS = [
@@ -49,7 +69,6 @@ function getMonthRange(year, month) {
 }
 
 export default function MyShifts({ user }) {
-  // Track dark mode from body class
   const [darkMode, setDarkMode] = useState(() => document.body.classList.contains('dark-mode'));
   useEffect(() => {
     const observer = new MutationObserver(() => {
@@ -59,7 +78,6 @@ export default function MyShifts({ user }) {
     return () => observer.disconnect();
   }, []);
 
-  // Month navigation
   const today = new Date();
   const [monthOffset, setMonthOffset] = useState(0);
   const baseYear = today.getFullYear();
@@ -72,8 +90,10 @@ export default function MyShifts({ user }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState({ open: false, bookingId: null, label: '' });
+  const [hideCancelled, setHideCancelled] = useState(true);
+  const [hideCompleted, setHideCompleted] = useState(true);
+  const [collapsedWeeks, setCollapsedWeeks] = useState(new Set());
 
-  // Fetch shifts for the selected month
   const loadShifts = async () => {
     setLoading(true);
     setError('');
@@ -100,6 +120,11 @@ export default function MyShifts({ user }) {
     // eslint-disable-next-line
   }, [user.id, viewYear, viewMonth]);
 
+  // Reset collapsed state when month changes
+  useEffect(() => {
+    setCollapsedWeeks(new Set());
+  }, [viewYear, viewMonth]);
+
   const handleCancel = (bookingId, label) => {
     setModal({ open: true, bookingId, label });
   };
@@ -115,28 +140,30 @@ export default function MyShifts({ user }) {
     }
   };
 
+  const toggleWeek = (weekKey) => {
+    setCollapsedWeeks(prev => {
+      const next = new Set(prev);
+      if (next.has(weekKey)) next.delete(weekKey); else next.add(weekKey);
+      return next;
+    });
+  };
+
   if (loading) return <div style={{ textAlign: 'center', marginTop: '2rem' }}>Loading your shifts...</div>;
   if (error) return <div style={{ color: 'red', textAlign: 'center', marginTop: '2rem' }}>{error}</div>;
 
-  // Helper to compute stats for the month
   const getStats = () => {
     let shiftsWorked = 0, shiftsBooked = 0, cancellations = 0;
     const todayStr = new Date().toISOString().slice(0, 10);
     shifts.forEach(b => {
       if (b.status === 'booked') {
-        if (b.date < todayStr) {
-          shiftsWorked++;
-        } else {
-          shiftsBooked++;
-        }
-      } else if (b.status === 'canceled') {
+        if (b.date < todayStr) shiftsWorked++; else shiftsBooked++;
+      } else if (b.status === 'canceled' && !b.canceled_by_admin) {
         cancellations++;
       }
     });
     return { shiftsWorked, shiftsBooked, cancellations };
   };
 
-  // Check if a shift has ended (past the end time)
   const hasShiftEnded = (shift) => {
     const now = new Date();
     const shiftDateTime = new Date(`${shift.date}T${shift.end_time}`);
@@ -144,6 +171,20 @@ export default function MyShifts({ user }) {
   };
 
   const stats = getStats();
+
+  // Build week groups from the visible (filtered) shift list
+  const visibleShifts = shifts.filter(s => {
+    if (hideCancelled && s.status === 'canceled') return false;
+    if (hideCompleted && s.status === 'booked' && hasShiftEnded(s)) return false;
+    return true;
+  });
+  const weekGroupMap = {};
+  visibleShifts.forEach(shift => {
+    const wk = getWeekStart(shift.date);
+    if (!weekGroupMap[wk]) weekGroupMap[wk] = [];
+    weekGroupMap[wk].push(shift);
+  });
+  const weekGroups = Object.entries(weekGroupMap).sort(([a], [b]) => a.localeCompare(b));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '2rem', width: '100%', padding: '0 1rem', boxSizing: 'border-box', background: darkMode ? '#181818' : '#fff', color: darkMode ? '#e0e0e0' : '#181818', minHeight: '100vh' }}>
@@ -169,72 +210,135 @@ export default function MyShifts({ user }) {
       </div>
 
       {/* Stats summary */}
-      <div style={{ fontSize: '1rem', color: '#007bff', marginBottom: '1.5rem' }}>
+      <div style={{ fontSize: '1rem', color: '#007bff', marginBottom: '1rem' }}>
         <strong>Shifts Worked:</strong> {stats.shiftsWorked} &nbsp;
         <strong>Shifts Booked:</strong> {stats.shiftsBooked} &nbsp;
         <strong>Cancelled:</strong> {stats.cancellations}
       </div>
 
-      {/* Shifts list */}
-      {shifts.length === 0 ? (
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: '1.2rem', marginBottom: '1.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <label style={{ cursor: 'pointer', userSelect: 'none', fontSize: '0.95rem', color: darkMode ? '#b0b0b0' : '#555' }}>
+          <input
+            type="checkbox"
+            checked={hideCancelled}
+            onChange={e => setHideCancelled(e.target.checked)}
+            style={{ marginRight: 6 }}
+          />
+          Hide cancelled
+        </label>
+        <label style={{ cursor: 'pointer', userSelect: 'none', fontSize: '0.95rem', color: darkMode ? '#b0b0b0' : '#555' }}>
+          <input
+            type="checkbox"
+            checked={hideCompleted}
+            onChange={e => setHideCompleted(e.target.checked)}
+            style={{ marginRight: 6 }}
+          />
+          Hide completed
+        </label>
+      </div>
+
+      {/* Shifts grouped by week */}
+      {weekGroups.length === 0 ? (
         <div style={{ textAlign: 'center', marginTop: '2rem', color: '#888' }}>No shifts for this month</div>
       ) : (
         <div style={{ width: '100%', maxWidth: 480 }}>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {shifts.map(shift => {
-              const shiftEnded = hasShiftEnded(shift);
-              return (
-                <li
-                  key={shift.id}
+          {weekGroups.map(([weekKey, weekShifts]) => {
+            const isCollapsed = collapsedWeeks.has(weekKey);
+            const borderColor = darkMode ? '#333' : '#dde';
+            const headerBg = darkMode ? '#2a2e38' : '#f0f4ff';
+            const headerColor = darkMode ? '#a0b0ff' : '#3355cc';
+            return (
+              <div key={weekKey} style={{ marginBottom: 10 }}>
+                {/* Week header */}
+                <button
+                  onClick={() => toggleWeek(weekKey)}
                   style={{
-                    marginBottom: 12,
-                    border: '1px solid #ddd',
-                    borderRadius: 8,
-                    padding: '0.9rem 1rem',
-                    background: shift.status === 'canceled' ? (darkMode ? '#4d2323' : '#ffeaea') : (darkMode ? '#23272f' : '#fff'),
-                    boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
+                    width: '100%',
                     display: 'flex',
-                    flexDirection: 'column',
                     alignItems: 'center',
-                    textAlign: 'center',
-                    opacity: shift.status === 'canceled' || shiftEnded ? 0.7 : 1,
-                    color: darkMode ? '#e0e0e0' : '#181818',
+                    justifyContent: 'space-between',
+                    padding: '0.55rem 0.8rem',
+                    background: headerBg,
+                    border: `1px solid ${borderColor}`,
+                    borderRadius: isCollapsed ? 8 : '8px 8px 0 0',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '0.95rem',
+                    color: headerColor,
+                    textAlign: 'left',
                   }}
                 >
-                  <div style={{ fontWeight: 600, fontSize: '1.08rem', marginBottom: 2 }}>{formatDateHuman(shift.date)}</div>
-                  <div style={{ color: '#888', marginBottom: 6 }}>{formatTimeHuman(shift.start_time)} to {formatTimeHuman(shift.end_time)}</div>
-                  {shift.status === 'booked' && !shiftEnded && (
-                    <button
-                      style={{
-                        marginTop: 4,
-                        padding: '0.45rem 1.1rem',
-                        borderRadius: 6,
-                        border: 'none',
-                        background: '#e74c3c',
-                        color: '#fff',
-                        fontWeight: 500,
-                        fontSize: '1rem',
-                        cursor: 'pointer',
-                        boxShadow: '0 1px 6px rgba(0,0,0,0.08)',
-                        transition: 'background 0.2s',
-                      }}
-                      onClick={() => handleCancel(shift.id, `${shift.date} ${shift.start_time}-${shift.end_time}`)}
-                    >
-                      Cancel
-                    </button>
-                  )}
-                  {shift.status === 'booked' && shiftEnded && (
-                    <span style={{ color: '#888', fontWeight: 500, fontSize: '0.98rem' }}>Completed</span>
-                  )}
-                  {shift.status === 'canceled' && (
-                    <span style={{ color: '#a00', fontWeight: 500, fontSize: '0.98rem' }}>Canceled</span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                  <span>{isCollapsed ? '▶' : '▼'} {formatWeekHeader(weekKey)}</span>
+                  <span style={{ fontWeight: 400, fontSize: '0.82rem', color: darkMode ? '#888' : '#aaa' }}>
+                    {weekShifts.length} shift{weekShifts.length !== 1 ? 's' : ''}
+                  </span>
+                </button>
+
+                {/* Week rows */}
+                {!isCollapsed && (
+                  <div style={{ border: `1px solid ${borderColor}`, borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+                    {weekShifts.map((shift, i) => {
+                      const shiftEnded = hasShiftEnded(shift);
+                      const isLast = i === weekShifts.length - 1;
+                      const rowBg = shift.status === 'canceled'
+                        ? (darkMode ? '#3d1f1f' : '#fff5f5')
+                        : (darkMode ? '#1e2128' : '#fff');
+                      return (
+                        <div
+                          key={shift.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '0.55rem 0.8rem',
+                            background: rowBg,
+                            borderBottom: isLast ? 'none' : `1px solid ${darkMode ? '#2c2c2c' : '#eee'}`,
+                            opacity: shift.status === 'canceled' || shiftEnded ? 0.75 : 1,
+                            gap: '0.5rem',
+                          }}
+                        >
+                          <span style={{ fontWeight: 500, fontSize: '0.92rem', minWidth: 68 }}>
+                            {formatDayShort(shift.date)}
+                          </span>
+                          <span style={{ color: '#888', fontSize: '0.88rem', flex: 1 }}>
+                            {formatTimeHuman(shift.start_time)} – {formatTimeHuman(shift.end_time)}
+                          </span>
+                          <span style={{ minWidth: 76, textAlign: 'right' }}>
+                            {shift.status === 'canceled' && (
+                              <span style={{ color: '#c0392b', fontSize: '0.82rem', fontWeight: 500 }}>Cancelled</span>
+                            )}
+                            {shift.status === 'booked' && shiftEnded && (
+                              <span style={{ color: darkMode ? '#5cb85c' : '#27ae60', fontSize: '0.82rem', fontWeight: 500 }}>Completed</span>
+                            )}
+                            {shift.status === 'booked' && !shiftEnded && (
+                              <button
+                                style={{
+                                  padding: '0.28rem 0.65rem',
+                                  borderRadius: 5,
+                                  border: 'none',
+                                  background: '#e74c3c',
+                                  color: '#fff',
+                                  fontWeight: 500,
+                                  fontSize: '0.82rem',
+                                  cursor: 'pointer',
+                                }}
+                                onClick={() => handleCancel(shift.id, formatDateHuman(shift.date))}
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
+
       <ConfirmModal
         open={modal.open}
         onClose={() => setModal({ open: false, bookingId: null, label: '' })}

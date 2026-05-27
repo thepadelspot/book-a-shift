@@ -17,7 +17,7 @@ const UserStats = forwardRef(({ userId }, ref) => {
     }
     let query = supabase
       .from('bookings')
-      .select('status, start_time, end_time, date')
+      .select('status, start_time, end_time, date, canceled_by_admin')
       .eq('user_id', userId);
     if (from && to) {
       query = query.gte('date', from).lte('date', to);
@@ -35,7 +35,7 @@ const UserStats = forwardRef(({ userId }, ref) => {
         const start = parseInt(b.start_time.split(':')[0], 10);
         const end = parseInt(b.end_time.split(':')[0], 10);
         hours += end - start;
-      } else if (b.status === 'canceled') {
+      } else if (b.status === 'canceled' && !b.canceled_by_admin) {
         cancellations++;
       }
     });

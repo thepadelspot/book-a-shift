@@ -174,7 +174,7 @@ const BookPage = ({ user, darkMode }) => {
   const handleEditCancelShift = async () => {
     setError('');
     try {
-      await cancelShift(editModal.bookingId);
+      await cancelShift(editModal.bookingId, isAdmin);
       await refetchBookings();
       setEditModal({ open: false, dateKey: null, hour: null, bookingId: null, startTime: '', endTime: '' });
     } catch (e) {
@@ -218,7 +218,7 @@ const BookPage = ({ user, darkMode }) => {
     try {
       const booking = bookings[dateKey]?.[hour];
       if (!booking) return;
-      await cancelShift(booking.bookingId);
+      await cancelShift(booking.bookingId, isAdmin);
       // Refetch bookings
       const bookingsData = await fetchBookings(year, month);
       const bookingsMap = {};

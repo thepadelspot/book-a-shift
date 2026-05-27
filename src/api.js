@@ -66,11 +66,12 @@ export async function updateShift(booking_id, start_time, end_time) {
   return data;
 }
 
-// Cancel a shift
-export async function cancelShift(booking_id) {
+// Cancel a shift. Pass canceledByAdmin=true when an admin initiates the cancel
+// so it is excluded from the user's personal cancellation stats.
+export async function cancelShift(booking_id, canceledByAdmin = false) {
   const { data, error } = await supabase
     .from('bookings')
-    .update({ status: 'canceled', canceled_at: new Date().toISOString() })
+    .update({ status: 'canceled', canceled_at: new Date().toISOString(), canceled_by_admin: canceledByAdmin })
     .eq('id', booking_id);
   if (error) throw error;
   return data;

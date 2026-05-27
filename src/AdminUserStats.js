@@ -60,7 +60,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
         const { from, to } = getMonthRange(viewYear, viewMonth);
         const { data: bookings, error: bookingsError } = await supabase
           .from('bookings')
-          .select('user_id, status, start_time, end_time, date')
+          .select('user_id, status, start_time, end_time, date, canceled_by_admin')
           .gte('date', from)
           .lte('date', to);
         if (bookingsError) throw new Error('Failed to fetch bookings');
@@ -84,7 +84,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
             } else {
               statsMap[b.user_id].hoursBooked += hours;
             }
-          } else if (b.status === 'canceled') {
+          } else if (b.status === 'canceled' && !b.canceled_by_admin) {
             statsMap[b.user_id].cancellations++;
           }
         });
