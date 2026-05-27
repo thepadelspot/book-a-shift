@@ -45,7 +45,7 @@ export async function fetchClosedDays(year, month) {
   return data;
 }
 
-// Book a shift
+// Book a shift directly (admin use — bypasses the request queue)
 export async function bookShift({ user_id, date, start_time, end_time }) {
   const { data, error } = await supabase
     .from('bookings')
@@ -55,6 +55,48 @@ export async function bookShift({ user_id, date, start_time, end_time }) {
   if (error) throw error;
   return data;
 }
+
+// Submit a shift request (non-admin users — requires admin approval)
+export async function requestShift({ user_id, date, start_time, end_time }) {
+  const { data, error } = await supabase
+    .from('bookings')
+    .insert([{ user_id, date, start_time, end_time, status: 'pending' }]);
+  if (error) throw error;
+  return data;
+}
+
+// Approve a pending request → status becomes 'booked'
+export async function approveBooking(booking_id) {
+  const { data, error } = await supabase
+    .from('bookings')
+    .update({ status: 'booked' })
+    .eq('id', booking_id);
+  if (error) throw error;
+  return data;
+}
+
+// Deny a pending request → mark canceled by admin so it doesn't count against user
+export async function denyBooking(booking_id) {
+  const { data, error } = await supabase
+    .from('bookings')
+    .update({ status: 'canceled', canceled_at: new Date().toISOString(), canceled_by_admin: true })
+    .eq('id', booking_id);
+  if (error) throw error;
+  return data;
+}
+
+// Fetch all pending requests (all users)
+export async function fetchPendingRequests() {
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('status', 'pending')
+    .order('date', { ascending: true })
+    .order('start_time', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
 
 // Update a shift's start/end time
 export async function updateShift(booking_id, start_time, end_time) {

@@ -12,7 +12,7 @@ import horizontalLogo from './assets/landscape.png';
 import AdminClosedDays from './AdminClosedDays';
 import AdminUserStats from './AdminUserStats';
 import AdminShiftConfig from './AdminShiftConfig';
-
+import AdminBookingRequests from './AdminBookingRequests';
 import MyShifts from './MyShifts';
 
 
@@ -86,6 +86,11 @@ const AppContent = () => {
       <Navbar onNavigate={setPage} currentPage={page} darkMode={darkMode} isAdmin={isAdmin} />
       {page === 'book' && <BookPage user={user} darkMode={darkMode} />}
       {page === 'myshifts' && <MyShifts user={user} />}
+      {isAdmin && page === 'requests' && (
+        <div style={{ maxWidth: 700, margin: '0 auto' }}>
+          <AdminBookingRequests darkMode={darkMode} />
+        </div>
+      )}
       {isAdmin && page === 'closed' && (
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
           <h2>Closed Days</h2>

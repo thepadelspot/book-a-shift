@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Calendar from './Calendar';
-import { fetchBookings, fetchClosedDays, bookShift, cancelShift, updateShift, fetchShiftTemplates, fetchShiftOverrides } from './api';
+import { fetchBookings, fetchClosedDays, bookShift, requestShift, cancelShift, updateShift, fetchShiftTemplates, fetchShiftOverrides } from './api';
 import { supabase } from './supabaseClient';
 import AdminClosedDays from './AdminClosedDays';
 import AdminUserStats from './AdminUserStats';
@@ -53,10 +53,12 @@ const BookPage = ({ user, darkMode }) => {
     return () => { isMounted = false; };
   }, [user]);
   const [bookings, setBookings] = useState({});
+  const [pendingBookings, setPendingBookings] = useState({});
+  const [allPendingRequests, setAllPendingRequests] = useState({});
   const [shiftConfig, setShiftConfig] = useState({});
   const [modal, setModal] = useState({ open: false, dateKey: null, hour: null, duration: 4 });
   const [adminBookUserId, setAdminBookUserId] = useState('');
-  const [cancelModal, setCancelModal] = useState({ open: false, dateKey: null, hour: null, duration: 4 });
+  const [cancelModal, setCancelModal] = useState({ open: false, dateKey: null, hour: null, duration: 4, isPending: false });
   const [editModal, setEditModal] = useState({ open: false, dateKey: null, hour: null, bookingId: null, startTime: '', endTime: '' });
   const userStatsRef = useRef();
   const [closedDays, setClosedDays] = useState([]);
@@ -75,23 +77,47 @@ const BookPage = ({ user, darkMode }) => {
     let isMounted = true;
     setLoading(true);
     setError('');
+    const fromDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const toDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
     Promise.all([
       fetchBookings(year, month),
       fetchClosedDays(year, month),
       fetchShiftTemplates(),
       fetchShiftOverrides(year, month),
-    ]).then(([bookingsData, closedDaysData, templates, overrides]) => {
+      // Explicit own-pending fetch — guaranteed visible regardless of RLS policy
+      supabase.from('bookings').select('*')
+        .eq('user_id', user.id).eq('status', 'pending')
+        .gte('date', fromDate).lte('date', toDate),
+    ]).then(([bookingsData, closedDaysData, templates, overrides, { data: ownPendingData }]) => {
       if (!isMounted) return;
-      // Transform bookings to { [dateKey]: { [hour]: { bookingId, userId, status } } }
+      // Confirmed bookings map
       const bookingsMap = {};
+      // All-pending count map for admin calendar indicator
+      const allPendingMap = {};
       bookingsData.forEach(b => {
-        if (b.status !== 'booked') return;
         const dateKey = b.date;
         const hour = startTimeToDecimal(b.start_time);
-        if (!bookingsMap[dateKey]) bookingsMap[dateKey] = {};
-        bookingsMap[dateKey][hour] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time), start_time: b.start_time, end_time: b.end_time };
+        const entry = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time), start_time: b.start_time, end_time: b.end_time };
+        if (b.status === 'booked') {
+          if (!bookingsMap[dateKey]) bookingsMap[dateKey] = {};
+          bookingsMap[dateKey][hour] = entry;
+        } else if (b.status === 'pending') {
+          if (!allPendingMap[dateKey]) allPendingMap[dateKey] = {};
+          allPendingMap[dateKey][hour] = (allPendingMap[dateKey][hour] || 0) + 1;
+        }
+      });
+      // Own pending requests (from explicit filtered fetch)
+      const pendingMap = {};
+      (ownPendingData || []).forEach(b => {
+        const dateKey = b.date;
+        const hour = startTimeToDecimal(b.start_time);
+        if (!pendingMap[dateKey]) pendingMap[dateKey] = {};
+        pendingMap[dateKey][hour] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time), start_time: b.start_time, end_time: b.end_time };
       });
       setBookings(bookingsMap);
+      setPendingBookings(pendingMap);
+      setAllPendingRequests(allPendingMap);
       setClosedDays(closedDaysData.map(d => d.date));
       setShiftConfig(buildShiftConfigMap(year, month, templates, overrides));
       setLoading(false);
@@ -131,21 +157,45 @@ const BookPage = ({ user, darkMode }) => {
         endTime: (booking?.end_time || computeEndTime(hour, duration)).slice(0, 5),
       });
     } else {
-      setCancelModal({ open: true, dateKey, hour, duration });
+      const isPending = !bookings[dateKey]?.[hour] && !!pendingBookings[dateKey]?.[hour];
+      setCancelModal({ open: true, dateKey, hour, duration, isPending });
     }
   };
 
   const refetchBookings = async () => {
-    const bookingsData = await fetchBookings(year, month);
+    const fromDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const toDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const [bookingsData, { data: ownPendingData }] = await Promise.all([
+      fetchBookings(year, month),
+      supabase.from('bookings').select('*')
+        .eq('user_id', user.id).eq('status', 'pending')
+        .gte('date', fromDate).lte('date', toDate),
+    ]);
     const bookingsMap = {};
+    const allPendingMap = {};
     bookingsData.forEach(b => {
-      if (b.status !== 'booked') return;
       const dKey = b.date;
       const h = startTimeToDecimal(b.start_time);
-      if (!bookingsMap[dKey]) bookingsMap[dKey] = {};
-      bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time), start_time: b.start_time, end_time: b.end_time };
+      const entry = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time), start_time: b.start_time, end_time: b.end_time };
+      if (b.status === 'booked') {
+        if (!bookingsMap[dKey]) bookingsMap[dKey] = {};
+        bookingsMap[dKey][h] = entry;
+      } else if (b.status === 'pending') {
+        if (!allPendingMap[dKey]) allPendingMap[dKey] = {};
+        allPendingMap[dKey][h] = (allPendingMap[dKey][h] || 0) + 1;
+      }
+    });
+    const pendingMap = {};
+    (ownPendingData || []).forEach(b => {
+      const dKey = b.date;
+      const h = startTimeToDecimal(b.start_time);
+      if (!pendingMap[dKey]) pendingMap[dKey] = {};
+      pendingMap[dKey][h] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time), start_time: b.start_time, end_time: b.end_time };
     });
     setBookings(bookingsMap);
+    setPendingBookings(pendingMap);
+    setAllPendingRequests(allPendingMap);
   };
 
   const handleEditSave = async () => {
@@ -189,34 +239,22 @@ const BookPage = ({ user, darkMode }) => {
     try {
       const start_time = decimalHourToTimeStr(hour);
       const end_time = computeEndTime(hour, duration);
-      const bookingUserId = isAdmin ? adminBookUserId : user.id;
-      await bookShift({
-        user_id: bookingUserId,
-        date: dateKey,
-        start_time,
-        end_time
-      });
-      // Refetch bookings
-      const bookingsData = await fetchBookings(year, month);
-      const bookingsMap = {};
-      bookingsData.forEach(b => {
-        if (b.status !== 'booked') return;
-        const dKey = b.date;
-        const h = parseInt(b.start_time.split(':')[0], 10);
-        if (!bookingsMap[dKey]) bookingsMap[dKey] = {};
-        bookingsMap[dKey][h] = { bookingId: b.id, userId: b.user_id, duration: bookingDuration(b.start_time, b.end_time) };
-      });
-      setBookings(bookingsMap);
+      if (isAdmin) {
+        await bookShift({ user_id: adminBookUserId || user.id, date: dateKey, start_time, end_time });
+      } else {
+        await requestShift({ user_id: user.id, date: dateKey, start_time, end_time });
+      }
+      await refetchBookings();
       if (userStatsRef.current && userStatsRef.current.refresh) userStatsRef.current.refresh();
     } catch (e) {
-      setError('Booking failed');
+      setError(isAdmin ? 'Booking failed' : 'Request failed');
     }
   };
 
   const handleCancel = async (dateKey, hour) => {
     setError('');
     try {
-      const booking = bookings[dateKey]?.[hour];
+      const booking = bookings[dateKey]?.[hour] || pendingBookings[dateKey]?.[hour];
       if (!booking) return;
       await cancelShift(booking.bookingId, isAdmin);
       // Refetch bookings
@@ -239,7 +277,7 @@ const BookPage = ({ user, darkMode }) => {
   const confirmCancel = async () => {
     if (!cancelModal.dateKey || cancelModal.hour == null) return;
     await handleCancel(cancelModal.dateKey, cancelModal.hour);
-    setCancelModal({ open: false, dateKey: null, hour: null, duration: 4 });
+    setCancelModal({ open: false, dateKey: null, hour: null, duration: 4, isPending: false });
   };
 
   const renderDay = (day) => {
@@ -293,7 +331,8 @@ const BookPage = ({ user, darkMode }) => {
           {daySlots.map(slot => {
             const { start_hour: hour, duration_hours: duration, orphaned } = slot;
             const booking = bookings[dateKey]?.[hour];
-            const isMine = booking && booking.userId === user.id;
+            const myPending = !isAdmin ? pendingBookings[dateKey]?.[hour] : null;
+            const isMine = (booking && booking.userId === user.id) || !!myPending;
             let isPastSlot = isPastDay;
             if (!isPastDay && slotDate.getTime() === todayDate.getTime() && hour < now.getHours() + now.getMinutes() / 60) {
               isPastSlot = true;
@@ -305,21 +344,38 @@ const BookPage = ({ user, darkMode }) => {
             }
             const canCancel = isMine || isAdmin;
             const isSelected = isAdmin && !booking && selectedShifts.some(s => s.dateKey === dateKey && s.hour === hour);
+            // Determine button state class
+            let slotClass = 'available';
+            if (booking) slotClass = booking.userId === user.id ? 'mine' : 'booked';
+            else if (myPending) slotClass = 'pending';
+            const displayEntry = booking || myPending;
             return (
               <div key={hour} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <button
-                  className={`shift-btn ${booking ? (isMine ? 'mine' : 'booked') : 'available'}${isMine ? ' orange' : ''}${isPastSlot ? ' disabled' : ''}${isSelected ? ' selected' : ''}${darkMode ? ' dark-mode' : ''}`}
+                  className={`shift-btn ${slotClass}${booking && booking.userId === user.id ? ' orange' : ''}${isPastSlot ? ' disabled' : ''}${isSelected ? ' selected' : ''}${darkMode ? ' dark-mode' : ''}`}
                   disabled={(booking && !isMine && !isAdmin) || (isPastSlot && !isAdmin) || orphaned}
-                  onClick={() => booking ? (canCancel ? handleCancelClick(dateKey, hour, duration) : null) : (!orphaned ? handleBook(dateKey, hour, duration) : null)}
+                  onClick={() => {
+                    if (booking) { if (canCancel) handleCancelClick(dateKey, hour, duration); }
+                    else if (myPending) { handleCancelClick(dateKey, hour, duration); }
+                    else if (!orphaned) { handleBook(dateKey, hour, duration); }
+                  }}
                   style={isSelected ? { border: '2px solid #2ecc40', boxShadow: '0 0 6px #2ecc40' } : orphaned ? { opacity: 0.6, fontStyle: 'italic' } : {}}
-                  title={orphaned ? 'Slot removed from schedule — existing booking still shown' : undefined}
+                  title={orphaned ? 'Slot removed from schedule — existing booking still shown' : myPending ? 'Request pending admin approval' : undefined}
                 >
-                  {booking?.start_time
-                    ? `${booking.start_time.slice(0, 5)}–${booking.end_time.slice(0, 5)}`
+                  {displayEntry?.start_time
+                    ? `${displayEntry.start_time.slice(0, 5)}–${displayEntry.end_time.slice(0, 5)}`
                     : formatShiftTime(hour, duration).replace(' (next day)', '')}
                 </button>
                 {bookedBy && isAdmin && (
                   <span style={{ fontSize: '0.92em', color: '#888', marginTop: 2 }}>Booked by: {bookedBy}</span>
+                )}
+                {isAdmin && (allPendingRequests[dateKey]?.[hour] || 0) > 0 && (
+                  <span style={{ fontSize: '0.78em', color: '#c47d00', marginTop: 2 }}>
+                    {allPendingRequests[dateKey][hour]} request{allPendingRequests[dateKey][hour] !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {myPending && (
+                  <span style={{ fontSize: '0.78em', color: '#0055aa', marginTop: 2 }}>Requested</span>
                 )}
               </div>
             );
@@ -465,7 +521,7 @@ const BookPage = ({ user, darkMode }) => {
         onConfirm={confirmBook}
         message={modal.dateKey && modal.hour != null ? (
           <div>
-            {`Book shift on ${formatDateHuman(modal.dateKey)}: ${formatShiftTime(modal.hour, modal.duration)}?`}
+            {`${isAdmin ? 'Book' : 'Request'} shift on ${formatDateHuman(modal.dateKey)}: ${formatShiftTime(modal.hour, modal.duration)}?`}
             {isAdmin && (
               <div style={{ marginTop: 12 }}>
                 <label htmlFor="admin-book-user" style={{ marginRight: 8 }}>For user:</label>
@@ -487,9 +543,9 @@ const BookPage = ({ user, darkMode }) => {
       />
       <ConfirmModal
         open={cancelModal.open}
-        onClose={() => setCancelModal({ open: false, dateKey: null, hour: null })}
+        onClose={() => setCancelModal({ open: false, dateKey: null, hour: null, duration: 4, isPending: false })}
         onConfirm={confirmCancel}
-        message={cancelModal.dateKey && cancelModal.hour != null ? `Cancel shift on ${formatDateHuman(cancelModal.dateKey)}: ${formatShiftTime(cancelModal.hour, cancelModal.duration)}?` : ''}
+        message={cancelModal.dateKey && cancelModal.hour != null ? `${cancelModal.isPending ? 'Withdraw request' : 'Cancel shift'} on ${formatDateHuman(cancelModal.dateKey)}: ${formatShiftTime(cancelModal.hour, cancelModal.duration)}?` : ''}
         darkMode={darkMode}
       />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>

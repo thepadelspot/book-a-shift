@@ -563,6 +563,16 @@ body.dark-mode {
   color: #b36b00;
   border: 2px solid #ffb347;
 }
+.shift-btn.pending {
+  background: linear-gradient(90deg, #d6eaff 60%, #b3d4ff 100%);
+  color: #0055aa;
+  border: 2px dashed #4499ee;
+}
+.shift-btn.pending.dark-mode {
+  background: linear-gradient(90deg, #1a3a60 60%, #1e4a7a 100%);
+  color: #80b8ff;
+  border: 2px dashed #4499ee;
+}
 .navbar {
   display: flex;
   gap: 1rem;

@@ -152,16 +152,18 @@ export default function MyShifts({ user }) {
   if (error) return <div style={{ color: 'red', textAlign: 'center', marginTop: '2rem' }}>{error}</div>;
 
   const getStats = () => {
-    let shiftsWorked = 0, shiftsBooked = 0, cancellations = 0;
+    let shiftsWorked = 0, shiftsBooked = 0, cancellations = 0, pending = 0;
     const todayStr = new Date().toISOString().slice(0, 10);
     shifts.forEach(b => {
       if (b.status === 'booked') {
         if (b.date < todayStr) shiftsWorked++; else shiftsBooked++;
       } else if (b.status === 'canceled' && !b.canceled_by_admin) {
         cancellations++;
+      } else if (b.status === 'pending') {
+        pending++;
       }
     });
-    return { shiftsWorked, shiftsBooked, cancellations };
+    return { shiftsWorked, shiftsBooked, cancellations, pending };
   };
 
   const hasShiftEnded = (shift) => {
@@ -174,6 +176,7 @@ export default function MyShifts({ user }) {
 
   // Build week groups from the visible (filtered) shift list
   const visibleShifts = shifts.filter(s => {
+    if (s.status === 'pending') return true; // always show pending requests
     if (hideCancelled && s.status === 'canceled') return false;
     if (hideCompleted && s.status === 'booked' && hasShiftEnded(s)) return false;
     return true;
@@ -213,6 +216,7 @@ export default function MyShifts({ user }) {
       <div style={{ fontSize: '1rem', color: '#007bff', marginBottom: '1rem' }}>
         <strong>Shifts Worked:</strong> {stats.shiftsWorked} &nbsp;
         <strong>Shifts Booked:</strong> {stats.shiftsBooked} &nbsp;
+        {stats.pending > 0 && <><strong style={{ color: '#0055aa' }}>Pending:</strong> <span style={{ color: '#0055aa' }}>{stats.pending}</span> &nbsp;</>}
         <strong>Cancelled:</strong> {stats.cancellations}
       </div>
 
@@ -283,7 +287,9 @@ export default function MyShifts({ user }) {
                       const isLast = i === weekShifts.length - 1;
                       const rowBg = shift.status === 'canceled'
                         ? (darkMode ? '#3d1f1f' : '#fff5f5')
-                        : (darkMode ? '#1e2128' : '#fff');
+                        : shift.status === 'pending'
+                          ? (darkMode ? '#1a2e50' : '#eef5ff')
+                          : (darkMode ? '#1e2128' : '#fff');
                       return (
                         <div
                           key={shift.id}
@@ -305,7 +311,9 @@ export default function MyShifts({ user }) {
                           </span>
                           <span style={{ minWidth: 76, textAlign: 'right' }}>
                             {shift.status === 'canceled' && (
-                              <span style={{ color: '#c0392b', fontSize: '0.82rem', fontWeight: 500 }}>Cancelled</span>
+                              <span style={{ color: '#c0392b', fontSize: '0.82rem', fontWeight: 500 }}>
+                                {shift.canceled_by_admin ? 'Denied' : 'Cancelled'}
+                              </span>
                             )}
                             {shift.status === 'booked' && shiftEnded && (
                               <span style={{ color: darkMode ? '#5cb85c' : '#27ae60', fontSize: '0.82rem', fontWeight: 500 }}>Completed</span>
@@ -326,6 +334,26 @@ export default function MyShifts({ user }) {
                               >
                                 Cancel
                               </button>
+                            )}
+                            {shift.status === 'pending' && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                                <span style={{ color: '#0055aa', fontSize: '0.82rem', fontWeight: 500 }}>Pending</span>
+                                <button
+                                  style={{
+                                    padding: '0.2rem 0.5rem',
+                                    borderRadius: 4,
+                                    border: '1px solid #aaa',
+                                    background: 'transparent',
+                                    color: darkMode ? '#aaa' : '#666',
+                                    fontSize: '0.75rem',
+                                    cursor: 'pointer',
+                                  }}
+                                  onClick={() => handleCancel(shift.id, formatDateHuman(shift.date))}
+                                  title="Withdraw this request"
+                                >
+                                  Withdraw
+                                </button>
+                              </span>
                             )}
                           </span>
                         </div>
