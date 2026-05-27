@@ -552,7 +552,7 @@ const BookPage = ({ user, darkMode }) => {
         <button
           className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
           onClick={() => setMonthOffset(m => m - 1)}
-          disabled={monthOffset === 0}
+          disabled={isAdmin ? monthOffset === -24 : monthOffset === 0}
         >
           &lt; Prev
         </button>
@@ -560,7 +560,7 @@ const BookPage = ({ user, darkMode }) => {
         <button
           className={`calendar-nav-btn${darkMode ? ' dark-mode' : ''}`}
           onClick={() => setMonthOffset(m => m + 1)}
-          disabled={monthOffset === 1}
+          disabled={isAdmin ? monthOffset === 24 : monthOffset === 1}
         >
           Next &gt;
         </button>
