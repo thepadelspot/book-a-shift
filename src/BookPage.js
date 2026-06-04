@@ -369,7 +369,7 @@ const BookPage = ({ user, darkMode }) => {
                 {bookedBy && isAdmin && (
                   <span style={{ fontSize: '0.92em', color: '#888', marginTop: 2 }}>Booked by: {bookedBy}</span>
                 )}
-                {isAdmin && (allPendingRequests[dateKey]?.[hour] || 0) > 0 && (
+                {(allPendingRequests[dateKey]?.[hour] || 0) > 0 && (
                   <span style={{ fontSize: '0.78em', color: '#c47d00', marginTop: 2 }}>
                     {allPendingRequests[dateKey][hour]} request{allPendingRequests[dateKey][hour] !== 1 ? 's' : ''}
                   </span>
