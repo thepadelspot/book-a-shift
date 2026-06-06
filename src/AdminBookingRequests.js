@@ -30,13 +30,33 @@ function formatTime(t) {
   return `${hour}${suf}`;
 }
 
-// Auto-allocate algorithm (pure — no side effects, used for both preview and execution)
+// Auto-allocate algorithm (pure — no side effects).
+//
+// Only users who have at least one pending request in this batch contribute to
+// the weight pool. Users with zero requests are excluded so their weights don't
+// dilute other people's target shares.
+//
+// Contested slots use greedy deficit scoring with two additions:
+//
+// 1. Adjacency bonus (+0.1): a user who already has an approved adjacent slot on
+//    the same day gets a small boost so consecutive shifts cluster together.
+//
+// 2. Compensation credit: if a user loses a contested slot solely because of
+//    someone else's adjacency bonus (their base score was higher but the bonus
+//    flipped the result), they accumulate a credit equal to that bonus. The credit
+//    is carried forward and added to their score in future contested slots,
+//    ensuring they are prioritised elsewhere to offset the disadvantage. The
+//    credit is cleared when they next win a contested slot.
 function computeAllocation(requests, weights) {
-  const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0) || 1;
+  const requestingUserIds = new Set(requests.map(r => r.user_id));
+  const activeWeights = {};
+  Object.entries(weights).forEach(([uid, w]) => {
+    if (requestingUserIds.has(uid)) activeWeights[uid] = w;
+  });
+  const totalWeight = Object.values(activeWeights).reduce((a, b) => a + b, 0) || 1;
   const targetShare = {};
-  Object.entries(weights).forEach(([uid, w]) => { targetShare[uid] = w / totalWeight; });
+  Object.entries(activeWeights).forEach(([uid, w]) => { targetShare[uid] = w / totalWeight; });
 
-  // Group by slot key (date|start_time) — each slot can hold one person
   const slotMap = {};
   requests.forEach(r => {
     const key = `${r.date}|${r.start_time}`;
@@ -47,7 +67,8 @@ function computeAllocation(requests, weights) {
   const sortedSlots = Object.entries(slotMap).sort(([a], [b]) => a.localeCompare(b));
   const approvedHours = {};
   let totalApproved = 0;
-  const decisions = {}; // bookingId → 'approve' | 'deny'
+  const decisions = {};
+  const compensation = {}; // uid → credit accumulated from being displaced by adjacency bonus
 
   sortedSlots.forEach(([, requesters]) => {
     if (requesters.length === 1) {
@@ -57,26 +78,44 @@ function computeAllocation(requests, weights) {
       approvedHours[r.user_id] = (approvedHours[r.user_id] || 0) + h;
       totalApproved += h;
     } else {
-      // Pick user with greatest deficit (target share − current share)
-      let winner = null;
-      let bestScore = -Infinity;
-      requesters.forEach(r => {
+      // Score each requester, tracking base score and adjacency bonus separately
+      const scored = requesters.map(r => {
         const myApproved = approvedHours[r.user_id] || 0;
         const myShare = totalApproved > 0 ? myApproved / totalApproved : 0;
-        const score = (targetShare[r.user_id] || 0) - myShare;
-        if (score > bestScore || (score === bestScore && (weights[r.user_id] || 5) > (weights[winner?.user_id] || 5))) {
-          bestScore = score;
-          winner = r;
+        const deficit = (targetShare[r.user_id] || 0) - myShare;
+        const credit = compensation[r.user_id] || 0;
+        const hasAdjacentApproved = requests.some(req =>
+          req.user_id === r.user_id &&
+          req.date === r.date &&
+          decisions[req.id] === 'approve' &&
+          (req.end_time === r.start_time || req.start_time === r.end_time)
+        );
+        const adjacencyBonus = hasAdjacentApproved ? 0.1 : 0;
+        const baseScore = deficit + credit;
+        return { r, baseScore, adjacencyBonus, totalScore: baseScore + adjacencyBonus };
+      });
+
+      const winner = scored.reduce((best, cur) =>
+        cur.totalScore > best.totalScore ||
+        (cur.totalScore === best.totalScore && (activeWeights[cur.r.user_id] || 5) > (activeWeights[best.r.user_id] || 5))
+          ? cur : best
+      );
+
+      scored.forEach(({ r, baseScore }) => {
+        if (r.id === winner.r.id) return;
+        decisions[r.id] = 'deny';
+        // If this user's base score exceeded the winner's base score, the adjacency
+        // bonus was the sole reason they lost — give them a compensation credit.
+        if (baseScore > winner.baseScore) {
+          compensation[r.user_id] = (compensation[r.user_id] || 0) + winner.adjacencyBonus;
         }
       });
-      requesters.forEach(r => {
-        decisions[r.id] = r.id === winner.id ? 'approve' : 'deny';
-      });
-      if (winner) {
-        const h = shiftHours(winner.start_time, winner.end_time);
-        approvedHours[winner.user_id] = (approvedHours[winner.user_id] || 0) + h;
-        totalApproved += h;
-      }
+
+      decisions[winner.r.id] = 'approve';
+      compensation[winner.r.user_id] = 0; // winning a contested slot clears the credit
+      const h = shiftHours(winner.r.start_time, winner.r.end_time);
+      approvedHours[winner.r.user_id] = (approvedHours[winner.r.user_id] || 0) + h;
+      totalApproved += h;
     }
   });
 
@@ -84,6 +123,151 @@ function computeAllocation(requests, weights) {
 }
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function AllocationConfirmModal({ preview, userMap, darkMode, onConfirm, onCancel, confirming }) {
+  const { decisions, breakdown, approvedHours } = preview;
+
+  const totalApproved = Object.values(decisions).filter(d => d === 'approve').length;
+  const totalDenied = Object.values(decisions).filter(d => d === 'deny').length;
+
+  const usersWithBreakdown = Object.entries(breakdown)
+    .map(([uid, { approved, denied }]) => ({ uid, approved, denied, user: userMap[uid] }))
+    .sort((a, b) => b.approved.length - a.approved.length);
+
+  const bg = darkMode ? '#1a1d24' : '#fff';
+  const border = darkMode ? '#333' : '#dde';
+  const text = darkMode ? '#e0e0e0' : '#181818';
+  const subText = darkMode ? '#888' : '#aaa';
+  const headerBg = darkMode ? '#2a2e38' : '#f0f4ff';
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '1rem',
+    }}>
+      <div style={{
+        background: bg, borderRadius: 12, width: '100%', maxWidth: 560,
+        maxHeight: '85vh', display: 'flex', flexDirection: 'column',
+        boxShadow: '0 8px 40px rgba(0,0,0,0.35)',
+        border: `1px solid ${border}`,
+      }}>
+        {/* Header */}
+        <div style={{ padding: '1rem 1.2rem 0.75rem', borderBottom: `1px solid ${border}` }}>
+          <div style={{ fontWeight: 700, fontSize: '1.1rem', color: text, marginBottom: 2 }}>
+            Confirm Auto Allocation
+          </div>
+          <div style={{ fontSize: '0.85rem', color: subText }}>
+            {totalApproved} shift{totalApproved !== 1 ? 's' : ''} approved &nbsp;·&nbsp;
+            {totalDenied} request{totalDenied !== 1 ? 's' : ''} denied
+          </div>
+        </div>
+
+        {/* Scrollable breakdown */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '0.75rem 1.2rem' }}>
+          {usersWithBreakdown.map(({ uid, approved, denied, user }) => {
+            const name = user
+              ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email
+              : uid;
+            const hours = approvedHours[uid] || 0;
+            return (
+              <div key={uid} style={{ marginBottom: '1rem' }}>
+                <div style={{
+                  fontWeight: 600, fontSize: '0.92rem', color: text,
+                  marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  {name}
+                  {approved.length > 0 && (
+                    <span style={{ fontSize: '0.78rem', color: subText, fontWeight: 400 }}>
+                      {approved.length} shift{approved.length !== 1 ? 's' : ''} · {+hours.toFixed(1)}h
+                    </span>
+                  )}
+                </div>
+                {approved.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: denied.length ? 4 : 0 }}>
+                    {approved
+                      .slice().sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time))
+                      .map(req => (
+                        <div key={req.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '3px 8px', borderRadius: 5,
+                          background: darkMode ? '#1a3a20' : '#eafaf1',
+                          fontSize: '0.83rem',
+                        }}>
+                          <span style={{ color: '#27ae60', fontWeight: 600, fontSize: '0.75rem' }}>✓</span>
+                          <span style={{ color: darkMode ? '#6dca8a' : '#1a7f3c', fontWeight: 500 }}>
+                            {formatDateHuman(req.date)}
+                          </span>
+                          <span style={{ color: subText }}>
+                            {formatTime(req.start_time)} – {formatTime(req.end_time)}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+                {denied.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {denied
+                      .slice().sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time))
+                      .map(req => (
+                        <div key={req.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          padding: '3px 8px', borderRadius: 5,
+                          background: darkMode ? '#3a1a1a' : '#fdf0f0',
+                          fontSize: '0.83rem',
+                        }}>
+                          <span style={{ color: '#c0392b', fontWeight: 600, fontSize: '0.75rem' }}>✗</span>
+                          <span style={{ color: darkMode ? '#d47070' : '#a00', fontWeight: 500 }}>
+                            {formatDateHuman(req.date)}
+                          </span>
+                          <span style={{ color: subText }}>
+                            {formatTime(req.start_time)} – {formatTime(req.end_time)}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer buttons */}
+        <div style={{
+          padding: '0.75rem 1.2rem',
+          borderTop: `1px solid ${border}`,
+          background: headerBg,
+          display: 'flex', justifyContent: 'flex-end', gap: 10,
+          borderRadius: '0 0 12px 12px',
+        }}>
+          <button
+            onClick={onCancel}
+            disabled={confirming}
+            style={{
+              padding: '0.45rem 1.1rem', borderRadius: 6, fontWeight: 500, fontSize: '0.9rem',
+              border: `1px solid ${border}`, background: 'transparent', color: text, cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={confirming}
+            style={{
+              padding: '0.45rem 1.2rem', borderRadius: 6, border: 'none',
+              background: confirming ? '#aaa' : '#2ecc71',
+              color: '#fff', fontWeight: 600, fontSize: '0.95rem',
+              cursor: confirming ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {confirming ? 'Applying…' : 'Confirm & Apply'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminBookingRequests({ darkMode }) {
   const today = new Date();
@@ -99,6 +283,7 @@ export default function AdminBookingRequests({ darkMode }) {
   const [error, setError] = useState('');
   const [acting, setActing] = useState(null);
   const [autoAllocating, setAutoAllocating] = useState(false);
+  const [allocationPreview, setAllocationPreview] = useState(null);
   const [hideAdmins, setHideAdmins] = useState(true);
   const ADMIN_FIRST_NAMES = ['adnan', 'haroon', 'emadul', 'taha', 'azeem'];
 
@@ -120,7 +305,6 @@ export default function AdminBookingRequests({ darkMode }) {
       if (re) throw re;
       setUsers(usersData || []);
       setRequests(reqData || []);
-      // Weights are session-only — reset to 5 for each new month load
       const wMap = {};
       (usersData || []).forEach(u => { wMap[u.id] = 5; });
       setWeights(wMap);
@@ -158,17 +342,31 @@ export default function AdminBookingRequests({ darkMode }) {
     setActing(null);
   };
 
-  const handleAutoAllocate = async () => {
+  const handleAutoAllocatePreview = () => {
+    const { decisions, approvedHours } = computeAllocation(requests, weights);
+    const breakdown = {};
+    Object.entries(decisions).forEach(([id, action]) => {
+      const req = requests.find(r => r.id === id);
+      if (!req) return;
+      const uid = req.user_id;
+      if (!breakdown[uid]) breakdown[uid] = { approved: [], denied: [] };
+      breakdown[uid][action === 'approve' ? 'approved' : 'denied'].push(req);
+    });
+    setAllocationPreview({ decisions, breakdown, approvedHours });
+  };
+
+  const handleConfirmAutoAllocate = async () => {
+    if (!allocationPreview) return;
     setAutoAllocating(true);
     setError('');
     try {
-      const { decisions } = computeAllocation(requests, weights);
       await Promise.all(
-        Object.entries(decisions).map(([id, action]) =>
+        Object.entries(allocationPreview.decisions).map(([id, action]) =>
           action === 'approve' ? approveBooking(id) : denyBooking(id)
         )
       );
       setRequests([]);
+      setAllocationPreview(null);
     } catch {
       setError('Auto-allocate failed');
     }
@@ -177,10 +375,13 @@ export default function AdminBookingRequests({ darkMode }) {
 
   if (loading) return <div style={{ textAlign: 'center', marginTop: '2rem' }}>Loading requests...</div>;
 
-  // Preview: run algorithm with current weights (no DB writes)
-  const { approvedHours: previewHours } = computeAllocation(requests, weights);
+  const { approvedHours: previewHours, decisions: previewDecisions } = computeAllocation(requests, weights);
 
-  // Group requests by slot key so we can flag contested slots
+  // Baseline: everyone who has requests gets equal weight — used to show the delta each slider causes
+  const baselineWeights = {};
+  requests.forEach(r => { baselineWeights[r.user_id] = 5; });
+  const { decisions: baselineDecisions } = computeAllocation(requests, baselineWeights);
+
   const slotMap = {};
   requests.forEach(r => {
     const key = `${r.date}|${r.start_time}`;
@@ -189,7 +390,6 @@ export default function AdminBookingRequests({ darkMode }) {
   });
   const isContested = (r) => (slotMap[`${r.date}|${r.start_time}`]?.length ?? 0) > 1;
 
-  // Group requests by date for the list
   const byDate = {};
   requests.forEach(r => {
     if (!byDate[r.date]) byDate[r.date] = [];
@@ -197,7 +397,6 @@ export default function AdminBookingRequests({ darkMode }) {
   });
   const sortedDates = Object.keys(byDate).sort();
 
-  // User lookup
   const userMap = {};
   users.forEach(u => { userMap[u.id] = u; });
 
@@ -213,6 +412,17 @@ export default function AdminBookingRequests({ darkMode }) {
 
   return (
     <div style={{ padding: '0 1rem 3rem', maxWidth: 700, margin: '0 auto', color: text }}>
+      {allocationPreview && (
+        <AllocationConfirmModal
+          preview={allocationPreview}
+          userMap={userMap}
+          darkMode={darkMode}
+          onConfirm={handleConfirmAutoAllocate}
+          onCancel={() => setAllocationPreview(null)}
+          confirming={autoAllocating}
+        />
+      )}
+
       <h3 style={{ textAlign: 'center', marginBottom: '1rem', fontSize: '1.5rem', fontWeight: 600 }}>Booking Requests</h3>
 
       {/* Month navigation */}
@@ -248,7 +458,6 @@ export default function AdminBookingRequests({ darkMode }) {
           </label>
         </div>
 
-        {/* Table header */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px 80px 100px', gap: 0, background: darkMode ? '#252930' : '#fafbff', padding: '0.4rem 1rem', fontSize: '0.8rem', color: subText, fontWeight: 600, borderBottom: `1px solid ${border}` }}>
           <span>User</span>
           <span>Weight</span>
@@ -259,9 +468,11 @@ export default function AdminBookingRequests({ darkMode }) {
         {visibleUsers.map(u => {
           const userRequests = requests.filter(r => r.user_id === u.id);
           const wouldGetHours = previewHours[u.id] || 0;
-          const wouldGetShifts = Object.entries(
-            computeAllocation(requests, weights).decisions
-          ).filter(([id, action]) => action === 'approve' && requests.find(r => r.id === id && r.user_id === u.id)).length;
+          const wouldGetShifts = Object.entries(previewDecisions)
+            .filter(([id, action]) => action === 'approve' && requests.find(r => r.id === id && r.user_id === u.id)).length;
+          const baselineShifts = Object.entries(baselineDecisions)
+            .filter(([id, action]) => action === 'approve' && requests.find(r => r.id === id && r.user_id === u.id)).length;
+          const delta = wouldGetShifts - baselineShifts;
 
           return (
             <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '1fr 180px 80px 100px', gap: 0, padding: '0.55rem 1rem', borderBottom: `1px solid ${border}`, background: cardBg, alignItems: 'center' }}>
@@ -282,11 +493,21 @@ export default function AdminBookingRequests({ darkMode }) {
               <span style={{ textAlign: 'center', fontSize: '0.9rem', color: userRequests.length > 0 ? '#0055aa' : subText }}>
                 {userRequests.length}
               </span>
-              <span style={{ textAlign: 'right', fontSize: '0.85rem' }}>
+              <span style={{ textAlign: 'right', fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }}>
                 {userRequests.length > 0 ? (
-                  <span style={{ color: darkMode ? '#5cb85c' : '#1a7f1a', fontWeight: 500 }}>
-                    {wouldGetShifts} shift{wouldGetShifts !== 1 ? 's' : ''} ({+wouldGetHours.toFixed(1)}h)
-                  </span>
+                  <>
+                    <span style={{ color: darkMode ? '#5cb85c' : '#1a7f1a', fontWeight: 500 }}>
+                      {wouldGetShifts} shift{wouldGetShifts !== 1 ? 's' : ''} ({+wouldGetHours.toFixed(1)}h)
+                    </span>
+                    {delta !== 0 && (
+                      <span style={{
+                        fontSize: '0.78rem', fontWeight: 700,
+                        color: delta > 0 ? '#27ae60' : '#c0392b',
+                      }}>
+                        {delta > 0 ? `+${delta}` : delta}
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <span style={{ color: subText }}>—</span>
                 )}
@@ -295,14 +516,13 @@ export default function AdminBookingRequests({ darkMode }) {
           );
         })}
 
-        {/* Auto Allocate button */}
         <div style={{ padding: '0.75rem 1rem', background: headerBg, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12 }}>
           {requests.length === 0 && (
             <span style={{ fontSize: '0.88rem', color: subText }}>No pending requests</span>
           )}
           <button
-            onClick={handleAutoAllocate}
-            disabled={autoAllocating || requests.length === 0}
+            onClick={handleAutoAllocatePreview}
+            disabled={requests.length === 0}
             style={{
               padding: '0.45rem 1.2rem',
               borderRadius: 6,
@@ -314,7 +534,7 @@ export default function AdminBookingRequests({ darkMode }) {
               cursor: requests.length === 0 ? 'not-allowed' : 'pointer',
             }}
           >
-            {autoAllocating ? 'Allocating…' : 'Auto Allocate'}
+            Auto Allocate
           </button>
         </div>
       </div>
@@ -329,11 +549,9 @@ export default function AdminBookingRequests({ darkMode }) {
           </div>
           {sortedDates.map(date => (
             <div key={date} style={{ marginBottom: 12 }}>
-              {/* Date header */}
               <div style={{ background: headerBg, border: `1px solid ${border}`, borderRadius: '8px 8px 0 0', padding: '0.5rem 0.8rem', fontWeight: 600, fontSize: '0.9rem', color: darkMode ? '#a0b0ff' : '#3355cc' }}>
                 {formatDateHuman(date)}
               </div>
-              {/* Request rows */}
               <div style={{ border: `1px solid ${border}`, borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
                 {byDate[date].map((req, i) => {
                   const u = userMap[req.user_id];
