@@ -68,6 +68,16 @@ export function startTimeToDecimal(t) {
   return h + (m || 0) / 60;
 }
 
+// Non-admins cannot cancel a booked shift this close to its start.
+// Keep in sync with the enforce_cancellation_cutoff trigger (supabase-migrations/cancellation-cutoff.sql).
+export const CANCELLATION_CUTOFF_HOURS = 48;
+
+/** True if a shift on dateStr (YYYY-MM-DD) starting at start_time (HH:MM[:SS]) is inside the cancellation cutoff. */
+export function isWithinCancellationCutoff(dateStr, start_time) {
+  const start = new Date(`${dateStr}T${start_time.slice(0, 5)}:00`);
+  return start.getTime() - Date.now() < CANCELLATION_CUTOFF_HOURS * 60 * 60 * 1000;
+}
+
 /**
  * Compute end_time string for DB insertion.
  * Supports fractional hours (e.g. 0.5 = 30 minutes).

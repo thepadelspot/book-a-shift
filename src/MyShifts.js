@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import { cancelShift } from './api';
 import ConfirmModal from './ConfirmModal';
+import { isWithinCancellationCutoff, CANCELLATION_CUTOFF_HOURS } from './utils/shiftConfig';
 
 function ordinal(n) {
   if (n > 3 && n < 21) return 'th';
@@ -136,7 +137,9 @@ export default function MyShifts({ user }) {
       await cancelShift(modal.bookingId);
       await loadShifts();
     } catch (e) {
-      setError('Cancel failed');
+      setError(e?.message?.includes('CANCELLATION_CUTOFF')
+        ? `Shifts can't be cancelled within ${CANCELLATION_CUTOFF_HOURS} hours of the start time. Please contact a member of the management team.`
+        : 'Cancel failed');
     }
   };
 
@@ -318,7 +321,15 @@ export default function MyShifts({ user }) {
                             {shift.status === 'booked' && shiftEnded && (
                               <span style={{ color: darkMode ? '#5cb85c' : '#27ae60', fontSize: '0.82rem', fontWeight: 500 }}>Completed</span>
                             )}
-                            {shift.status === 'booked' && !shiftEnded && (
+                            {shift.status === 'booked' && !shiftEnded && isWithinCancellationCutoff(shift.date, shift.start_time) && (
+                              <span
+                                style={{ color: darkMode ? '#aaa' : '#888', fontSize: '0.75rem' }}
+                                title={`Shifts can't be cancelled within ${CANCELLATION_CUTOFF_HOURS} hours of the start time. Please contact a member of the management team.`}
+                              >
+                                Contact management to cancel
+                              </span>
+                            )}
+                            {shift.status === 'booked' && !shiftEnded && !isWithinCancellationCutoff(shift.date, shift.start_time) && (
                               <button
                                 style={{
                                   padding: '0.28rem 0.65rem',
