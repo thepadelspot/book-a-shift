@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient';
 import AdminClosedDays from './AdminClosedDays';
 import AdminUserStats from './AdminUserStats';
 import ConfirmModal from './ConfirmModal';
-import { buildShiftConfigMap, formatShiftTime, computeEndTime, decimalHourToTimeStr, startTimeToDecimal, isWithinCancellationCutoff, CANCELLATION_CUTOFF_HOURS } from './utils/shiftConfig';
+import { buildShiftConfigMap, formatShiftTime, computeEndTime, decimalHourToTimeStr, startTimeToDecimal, isWithinCancellationCutoff, CANCELLATION_CUTOFF_MESSAGE } from './utils/shiftConfig';
 
 // Compute duration in hours from stored start_time / end_time strings (handles midnight crossing)
 function bookingDuration(start_time, end_time) {
@@ -60,6 +60,7 @@ const BookPage = ({ user, darkMode }) => {
   const [adminBookUserId, setAdminBookUserId] = useState('');
   const [cancelModal, setCancelModal] = useState({ open: false, dateKey: null, hour: null, duration: 4, isPending: false });
   const [editModal, setEditModal] = useState({ open: false, dateKey: null, hour: null, bookingId: null, startTime: '', endTime: '' });
+  const [cutoffNoticeOpen, setCutoffNoticeOpen] = useState(false);
   const userStatsRef = useRef();
   const [closedDays, setClosedDays] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -159,7 +160,7 @@ const BookPage = ({ user, darkMode }) => {
     } else {
       const isPending = !bookings[dateKey]?.[hour] && !!pendingBookings[dateKey]?.[hour];
       if (!isPending && isWithinCancellationCutoff(dateKey, bookings[dateKey][hour].start_time || decimalHourToTimeStr(hour))) {
-        setError(`Shifts can't be cancelled within ${CANCELLATION_CUTOFF_HOURS} hours of the start time. Please contact a member of the management team.`);
+        setCutoffNoticeOpen(true);
         return;
       }
       setCancelModal({ open: true, dateKey, hour, duration, isPending });
@@ -274,9 +275,8 @@ const BookPage = ({ user, darkMode }) => {
       setBookings(bookingsMap);
       if (userStatsRef.current && userStatsRef.current.refresh) userStatsRef.current.refresh();
     } catch (e) {
-      setError(e?.message?.includes('CANCELLATION_CUTOFF')
-        ? `Shifts can't be cancelled within ${CANCELLATION_CUTOFF_HOURS} hours of the start time. Please contact a member of the management team.`
-        : 'Cancel failed');
+      if (e?.message?.includes('CANCELLATION_CUTOFF')) setCutoffNoticeOpen(true);
+      else setError('Cancel failed');
     }
   };
 
@@ -553,6 +553,13 @@ const BookPage = ({ user, darkMode }) => {
         onConfirm={confirmCancel}
         message={cancelModal.dateKey && cancelModal.hour != null ? `${cancelModal.isPending ? 'Withdraw request' : 'Cancel shift'} on ${formatDateHuman(cancelModal.dateKey)}: ${formatShiftTime(cancelModal.hour, cancelModal.duration)}?` : ''}
         darkMode={darkMode}
+      />
+      <ConfirmModal
+        open={cutoffNoticeOpen}
+        onClose={() => setCutoffNoticeOpen(false)}
+        message={CANCELLATION_CUTOFF_MESSAGE}
+        darkMode={darkMode}
+        infoOnly
       />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
         <button

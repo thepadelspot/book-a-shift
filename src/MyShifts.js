@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import { cancelShift } from './api';
 import ConfirmModal from './ConfirmModal';
-import { isWithinCancellationCutoff, CANCELLATION_CUTOFF_HOURS } from './utils/shiftConfig';
+import { isWithinCancellationCutoff, CANCELLATION_CUTOFF_HOURS, CANCELLATION_CUTOFF_MESSAGE } from './utils/shiftConfig';
 
 function ordinal(n) {
   if (n > 3 && n < 21) return 'th';
@@ -91,6 +91,7 @@ export default function MyShifts({ user }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [modal, setModal] = useState({ open: false, bookingId: null, label: '' });
+  const [cutoffNoticeOpen, setCutoffNoticeOpen] = useState(false);
   const [hideCancelled, setHideCancelled] = useState(true);
   const [hideCompleted, setHideCompleted] = useState(true);
   const [collapsedWeeks, setCollapsedWeeks] = useState(new Set());
@@ -137,9 +138,12 @@ export default function MyShifts({ user }) {
       await cancelShift(modal.bookingId);
       await loadShifts();
     } catch (e) {
-      setError(e?.message?.includes('CANCELLATION_CUTOFF')
-        ? `Shifts can't be cancelled within ${CANCELLATION_CUTOFF_HOURS} hours of the start time. Please contact a member of the management team.`
-        : 'Cancel failed');
+      if (e?.message?.includes('CANCELLATION_CUTOFF')) {
+        setCutoffNoticeOpen(true);
+        await loadShifts();
+      } else {
+        setError('Cancel failed');
+      }
     }
   };
 
@@ -152,7 +156,6 @@ export default function MyShifts({ user }) {
   };
 
   if (loading) return <div style={{ textAlign: 'center', marginTop: '2rem' }}>Loading your shifts...</div>;
-  if (error) return <div style={{ color: 'red', textAlign: 'center', marginTop: '2rem' }}>{error}</div>;
 
   const getStats = () => {
     let shiftsWorked = 0, shiftsBooked = 0, cancellations = 0, pending = 0;
@@ -195,6 +198,26 @@ export default function MyShifts({ user }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '2rem', width: '100%', padding: '0 1rem', boxSizing: 'border-box', background: darkMode ? '#181818' : '#fff', color: darkMode ? '#e0e0e0' : '#181818', minHeight: '100vh' }}>
       <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: 600 }}>My Shifts</h3>
+
+      {error && <div style={{ color: 'red', textAlign: 'center', marginBottom: '1rem' }}>{error}</div>}
+
+      {/* Cancellation policy */}
+      <div style={{
+        maxWidth: 480,
+        width: '100%',
+        boxSizing: 'border-box',
+        marginBottom: '1rem',
+        padding: '0.6rem 0.8rem',
+        borderRadius: 8,
+        borderLeft: '4px solid #f5a623',
+        background: darkMode ? '#3a2f14' : '#fff8e1',
+        color: darkMode ? '#f0d08a' : '#7a5900',
+        fontSize: '0.88rem',
+        lineHeight: 1.5,
+      }}>
+        Shifts can't be cancelled within {CANCELLATION_CUTOFF_HOURS} hours of the start time.
+        If you can't make a shift, please contact a member of the management team.
+      </div>
 
       {/* Month navigation */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
@@ -322,12 +345,21 @@ export default function MyShifts({ user }) {
                               <span style={{ color: darkMode ? '#5cb85c' : '#27ae60', fontSize: '0.82rem', fontWeight: 500 }}>Completed</span>
                             )}
                             {shift.status === 'booked' && !shiftEnded && isWithinCancellationCutoff(shift.date, shift.start_time) && (
-                              <span
-                                style={{ color: darkMode ? '#aaa' : '#888', fontSize: '0.75rem' }}
-                                title={`Shifts can't be cancelled within ${CANCELLATION_CUTOFF_HOURS} hours of the start time. Please contact a member of the management team.`}
+                              <button
+                                style={{
+                                  padding: '0.2rem 0.5rem',
+                                  borderRadius: 4,
+                                  border: '1px solid #aaa',
+                                  background: 'transparent',
+                                  color: darkMode ? '#aaa' : '#666',
+                                  fontSize: '0.75rem',
+                                  cursor: 'pointer',
+                                }}
+                                onClick={() => setCutoffNoticeOpen(true)}
+                                title={CANCELLATION_CUTOFF_MESSAGE}
                               >
-                                Contact management to cancel
-                              </span>
+                                Can't cancel ⓘ
+                              </button>
                             )}
                             {shift.status === 'booked' && !shiftEnded && !isWithinCancellationCutoff(shift.date, shift.start_time) && (
                               <button
@@ -384,6 +416,13 @@ export default function MyShifts({ user }) {
         onConfirm={confirmCancel}
         message={`Cancel shift: ${modal.label}?`}
         darkMode={darkMode}
+      />
+      <ConfirmModal
+        open={cutoffNoticeOpen}
+        onClose={() => setCutoffNoticeOpen(false)}
+        message={CANCELLATION_CUTOFF_MESSAGE}
+        darkMode={darkMode}
+        infoOnly
       />
     </div>
   );

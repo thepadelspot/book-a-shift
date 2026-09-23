@@ -64,7 +64,7 @@ BEGIN
     url     := 'https://ajxcfdcwzakfpvpkfpsy.supabase.co/functions/v1/notify-shift-cancellation',
     headers := jsonb_build_object(
       'Content-Type',  'application/json',
-      'Authorization', 'Bearer Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqeGNmZGN3emFrZnB2cGtmcHN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMTkzNzUsImV4cCI6MjA4NTg5NTM3NX0.M1xZJLICq9OE0f0YNVRv4QylTHvR6bNgBRw3fm_ONtw'
+      'Authorization', 'Bearer YOUR_ANON_KEY'
     ),
     body    := jsonb_build_object('booking_id', NEW.id)
   );
