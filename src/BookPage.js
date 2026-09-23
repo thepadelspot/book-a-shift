@@ -579,7 +579,13 @@ const BookPage = ({ user, darkMode }) => {
         </button>
       </div>
       {/* AdminClosedDays and AdminUserStats removed from main page. Use Closed Days tab for admin controls. */}
-      {error && <div style={{ color: '#a00', marginBottom: 8 }}>{error}</div>}
+      <ConfirmModal
+        open={!!error}
+        onClose={() => setError('')}
+        message={<span style={{ color: '#a00' }}>{error}</span>}
+        darkMode={darkMode}
+        infoOnly
+      />
       {loading ? <div>Loading...</div> : <Calendar year={year} month={month} renderDay={renderDay} darkMode={darkMode} />}
       {isAdmin && selectedShifts.length > 0 && (
         <div style={{ margin: '16px 0', padding: '12px', border: '1px solid #2ecc40', borderRadius: 8, background: darkMode ? '#222' : '#f8fff8' }}>

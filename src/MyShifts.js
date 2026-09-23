@@ -199,7 +199,13 @@ export default function MyShifts({ user }) {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '2rem', width: '100%', padding: '0 1rem', boxSizing: 'border-box', background: darkMode ? '#181818' : '#fff', color: darkMode ? '#e0e0e0' : '#181818', minHeight: '100vh' }}>
       <h3 style={{ textAlign: 'center', marginBottom: '1.5rem', fontSize: '1.5rem', fontWeight: 600 }}>My Shifts</h3>
 
-      {error && <div style={{ color: 'red', textAlign: 'center', marginBottom: '1rem' }}>{error}</div>}
+      <ConfirmModal
+        open={!!error}
+        onClose={() => setError('')}
+        message={<span style={{ color: 'red' }}>{error}</span>}
+        darkMode={darkMode}
+        infoOnly
+      />
 
       {/* Cancellation policy */}
       <div style={{
