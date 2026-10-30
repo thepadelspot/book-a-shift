@@ -1,6 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { handleCheckIn as apiHandleCheckIn } from './api';
 
+// Premises coordinates - stored in codebase
+const PREMISES = {
+  latitude: 53.627147,
+  longitude: -2.1836641,
+  radius: 50, // meters
+  name: 'The Padel Spot'
+};
+
+// Calculate distance between two coordinates (in meters) using Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // Earth's radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distance in meters
+}
+
 function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -24,7 +48,25 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           try {
-            const { latitude, longitude } = position.coords;
+            const { latitude, longitude, accuracy } = position.coords;
+
+            // Calculate distance from premises
+            const distanceToVenue = calculateDistance(
+              latitude,
+              longitude,
+              PREMISES.latitude,
+              PREMISES.longitude
+            );
+
+            // Check if within acceptable radius
+            if (distanceToVenue > PREMISES.radius) {
+              setError(
+                `You are ${Math.round(distanceToVenue)}m away from ${PREMISES.name}. ` +
+                `You must be within ${PREMISES.radius}m to check in.`
+              );
+              setLoading(false);
+              return;
+            }
 
             // Get current time in HH:MM format
             const now = new Date();
@@ -45,7 +87,8 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
         (error) => {
           setError(`Location error: ${error.message}`);
           setLoading(false);
-        }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } catch (err) {
       setError(err.message || 'Check-in failed');
@@ -78,10 +121,10 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
       color: darkMode ? '#93d5ff' : '#084298',
     }}>
       <div style={{ marginBottom: '0.75rem', fontWeight: 600 }}>
-        Time to check in!
+        🔍 Check in to start your shift
       </div>
       <p style={{ margin: '0.5rem 0', fontSize: '0.9rem' }}>
-        Please check in by tapping the button below. Your location will be recorded. If you arrive late, your start time and the previous person's end time will be automatically adjusted.
+        Must be within {PREMISES.radius}m of {PREMISES.name} to check in. Your location will be recorded. If you arrive late, both your start time and the previous person's end time will be automatically adjusted.
       </p>
       {error && (
         <div style={{
@@ -92,7 +135,7 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
           padding: '0.5rem',
           borderRadius: '4px'
         }}>
-          {error}
+          ⚠️ {error}
         </div>
       )}
       <button
@@ -108,6 +151,7 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
           fontSize: '1rem',
           fontWeight: 600,
           opacity: loading ? 0.7 : 1,
+          transition: 'all 0.2s ease',
         }}
       >
         {loading ? 'Getting location...' : 'Check In Now'}
