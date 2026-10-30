@@ -29,6 +29,7 @@ const AppContent = () => {
   });
   const [isAdmin, setIsAdmin] = React.useState(false);
   const [isAdminLoading, setIsAdminLoading] = React.useState(true);
+  const [checkedInToday, setCheckedInToday] = React.useState(false);
 
   React.useEffect(() => {
     document.body.classList.toggle('dark-mode', darkMode);
@@ -58,6 +59,29 @@ const AppContent = () => {
     return () => { isMounted = false; };
   }, [user]);
 
+  // Check if user has checked in today
+  React.useEffect(() => {
+    let isMounted = true;
+    if (!user?.id) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    import('./supabaseClient').then(({ supabase }) => {
+      supabase
+        .from('bookings')
+        .select('checked_in_at')
+        .eq('user_id', user.id)
+        .eq('date', today)
+        .eq('status', 'booked')
+        .then(({ data }) => {
+          if (isMounted) {
+            const hasCheckedIn = data && data.some(b => b.checked_in_at);
+            setCheckedInToday(hasCheckedIn);
+          }
+        });
+    });
+    return () => { isMounted = false; };
+  }, [user]);
+
   // Show password reset page if hash in URL
   if (window.location.hash.startsWith('#/reset')) {
     return <ResetPasswordPage />;
@@ -69,20 +93,19 @@ const AppContent = () => {
     <div className={`App${darkMode ? ' dark-mode' : ''}`} style={{ minHeight: '100vh' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: '1.5rem', borderBottom: darkMode ? '1px solid #333333' : '1px solid #e5e7eb', marginBottom: '1.5rem' }}>
         <img src={horizontalLogo} alt="Padel Spot Logo" style={{ height: '110px', marginBottom: '1rem', filter: darkMode ? 'brightness(1.1)' : 'none' }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '0.5rem' }}>
-          <button
-            className={`dark-mode-toggle${darkMode ? '' : ' light'}`}
-            onClick={() => setDarkMode(d => !d)}
-            aria-label="Toggle dark mode"
-          >
-            {darkMode ? '🌙' : '☀️'}
-          </button>
-          {(user?.firstName || user?.email) && (
-            <span style={{ fontSize: '1.1rem', fontWeight: 600, color: darkMode ? '#f1f5f9' : '#111827' }}>
-              Hello, {user?.firstName ? user.firstName : user.email}
-            </span>
-          )}
-        </div>
+        {(user?.firstName || user?.email) && (
+          <span style={{ fontSize: '1.1rem', fontWeight: 600, color: darkMode ? '#f1f5f9' : '#111827', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            Hello, {user?.firstName ? user.firstName : user.email}
+            {checkedInToday && <span style={{ color: '#00ff00', fontWeight: 'bold', fontSize: '1.2rem' }}>✓</span>}
+          </span>
+        )}
+        <button
+          className={`dark-mode-toggle${darkMode ? '' : ' light'}`}
+          onClick={() => setDarkMode(d => !d)}
+          aria-label="Toggle dark mode"
+        >
+          {darkMode ? '🌙' : '☀️'}
+        </button>
       </div>
       <Navbar onNavigate={setPage} currentPage={page} darkMode={darkMode} isAdmin={isAdmin} />
       {page === 'book' && <BookPage user={user} darkMode={darkMode} />}
