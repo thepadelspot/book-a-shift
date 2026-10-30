@@ -1,7 +1,5 @@
 // Playtomic API integration
 const PLAYTOMIC_BASE_URL = 'https://thirdparty.playtomic.io/api/v1';
-// CORS proxy for GitHub Pages deployment
-const CORS_PROXY = 'https://thingproxy.freeboard.io/fetch/';
 
 let cachedToken = null;
 let tokenExpiresAt = null;
@@ -35,7 +33,7 @@ export async function getPlaytomicToken() {
       return null;
     }
 
-    const response = await fetch(`${CORS_PROXY}${PLAYTOMIC_BASE_URL}/oauth/token`, {
+    const response = await fetch(`https://cors-anywhere.herokuapp.com/${PLAYTOMIC_BASE_URL}/oauth/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -93,7 +91,7 @@ export async function fetchPlaytomicBookings(startDate, endDate) {
     });
 
     const response = await fetch(
-      `${CORS_PROXY}${PLAYTOMIC_BASE_URL}/bookings?${params}`,
+      `https://cors-anywhere.herokuapp.com/${PLAYTOMIC_BASE_URL}/bookings?${params}`,
       {
         method: 'GET',
         headers: {
