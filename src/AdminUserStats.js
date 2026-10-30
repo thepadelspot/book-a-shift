@@ -44,8 +44,9 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
   const [exportingFull, setExportingFull] = useState(false);
 
   const [hideAdmins, setHideAdmins] = useState(true);
+  const [hideFiredStaff, setHideFiredStaff] = useState(true);
   const ADMIN_FIRST_NAMES = ['adnan', 'haroon', 'emadul', 'taha', 'azeem'];
-  const FIRED_STAFF_NAMES = ['imaan', 'aminur'];
+  const FIRED_STAFF_FIRST_NAMES = ['imaan', 'aminur'];
 
   // Fetch users and bookings for stats
   useEffect(() => {
@@ -290,7 +291,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
         </div>
       </div>
       <div style={{ marginBottom: 8 }}>
-        <label style={{ cursor: 'pointer', userSelect: 'none' }}>
+        <label style={{ cursor: 'pointer', userSelect: 'none', marginRight: 16 }}>
           <input
             type="checkbox"
             checked={hideAdmins}
@@ -298,6 +299,15 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
             style={{ marginRight: 6 }}
           />
           Hide admins
+        </label>
+        <label style={{ cursor: 'pointer', userSelect: 'none' }}>
+          <input
+            type="checkbox"
+            checked={hideFiredStaff}
+            onChange={e => setHideFiredStaff(e.target.checked)}
+            style={{ marginRight: 6 }}
+          />
+          Hide fired staff
         </label>
       </div>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -314,7 +324,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
             .filter(u => {
               const firstName = (u.firstName || '').toLowerCase();
               if (hideAdmins && ADMIN_FIRST_NAMES.includes(firstName)) return false;
-              if (FIRED_STAFF_NAMES.includes(firstName)) return false;
+              if (hideFiredStaff && FIRED_STAFF_FIRST_NAMES.includes(firstName)) return false;
               return true;
             })
             .map(u => (
@@ -331,7 +341,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
             const visibleUsers = users.filter(u => {
               const firstName = (u.firstName || '').toLowerCase();
               if (hideAdmins && ADMIN_FIRST_NAMES.includes(firstName)) return false;
-              if (FIRED_STAFF_NAMES.includes(firstName)) return false;
+              if (hideFiredStaff && FIRED_STAFF_FIRST_NAMES.includes(firstName)) return false;
               return true;
             });
             return (
