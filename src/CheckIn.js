@@ -37,6 +37,17 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
     }
   }, [shift]);
 
+  // Check if shift has started
+  const now = new Date();
+  const currentHours = now.getHours();
+  const currentMinutes = now.getMinutes();
+  const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+
+  const [shiftStartH, shiftStartM] = (shift?.start_time || '00:00').split(':').map(Number);
+  const shiftStartInMinutes = shiftStartH * 60 + shiftStartM;
+
+  const shiftHasStarted = currentTimeInMinutes >= shiftStartInMinutes;
+
   const handleCheckIn = async () => {
     setLoading(true);
     setError('');
@@ -144,6 +155,23 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
     );
   }
 
+  // Hide check-in if shift hasn't started yet
+  if (!shiftHasStarted) {
+    return (
+      <div style={{
+        padding: '1rem',
+        marginBottom: '1rem',
+        background: darkMode ? '#1a2a3d' : '#f0f4f8',
+        border: `1px solid ${darkMode ? '#334455' : '#d1d5db'}`,
+        borderRadius: '8px',
+        color: darkMode ? '#8899bb' : '#6b7280',
+        fontSize: '0.9rem',
+      }}>
+        ⏰ Check-in available at {shift?.start_time || '00:00'}
+      </div>
+    );
+  }
+
   return (
     <div style={{
       padding: '1rem',
@@ -157,7 +185,7 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
         🔍 Check in to start your shift
       </div>
       <p style={{ margin: '0.5rem 0', fontSize: '0.9rem' }}>
-        Must be within {PREMISES.radius}m of {PREMISES.name} to check in. Your location will be recorded.
+        Must be within {PREMISES.radius}m of {PREMISES.name} to check in.
       </p>
       {error && (
         <div style={{
