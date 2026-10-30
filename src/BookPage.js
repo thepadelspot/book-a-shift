@@ -6,6 +6,7 @@ import AdminClosedDays from './AdminClosedDays';
 import AdminUserStats from './AdminUserStats';
 import ConfirmModal from './ConfirmModal';
 import NextShiftPerson from './NextShiftPerson';
+import { fetchPlaytomicBookings, hasBookingDuringShift } from './playtomicApi';
 import { buildShiftConfigMap, formatShiftTime, computeEndTime, decimalHourToTimeStr, startTimeToDecimal, isWithinCancellationCutoff, CANCELLATION_CUTOFF_MESSAGE } from './utils/shiftConfig';
 
 // Compute duration in hours from stored start_time / end_time strings (handles midnight crossing)
@@ -64,6 +65,7 @@ const BookPage = ({ user, darkMode }) => {
   const [cutoffNoticeOpen, setCutoffNoticeOpen] = useState(false);
   const userStatsRef = useRef();
   const [closedDays, setClosedDays] = useState([]);
+  const [playtomicBookings, setPlaytomicBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const today = new Date();
@@ -91,7 +93,9 @@ const BookPage = ({ user, darkMode }) => {
       supabase.from('bookings').select('*')
         .eq('user_id', user.id).eq('status', 'pending')
         .gte('date', fromDate).lte('date', toDate),
-    ]).then(([bookingsData, closedDaysData, templates, overrides, { data: ownPendingData }]) => {
+      // Fetch Playtomic bookings for the month
+      fetchPlaytomicBookings(`${year}-${String(month + 1).padStart(2, '0')}-01T00:00:00`, `${year}-${String(month + 1).padStart(2, '0')}-${String(new Date(year, month + 1, 0).getDate()).padStart(2, '0')}T23:59:59`),
+    ]).then(([bookingsData, closedDaysData, templates, overrides, { data: ownPendingData }, playtomicData]) => {
       if (!isMounted) return;
       // Confirmed bookings map
       const bookingsMap = {};
@@ -121,6 +125,7 @@ const BookPage = ({ user, darkMode }) => {
       setPendingBookings(pendingMap);
       setAllPendingRequests(allPendingMap);
       setClosedDays(closedDaysData.map(d => d.date));
+      setPlaytomicBookings(playtomicData || []);
       setShiftConfig(buildShiftConfigMap(year, month, templates, overrides));
       setLoading(false);
     }).catch(e => {
@@ -356,8 +361,24 @@ const BookPage = ({ user, darkMode }) => {
             if (booking) slotClass = booking.userId === user.id ? 'mine' : 'booked';
             else if (myPending) slotClass = 'pending';
             const displayEntry = booking || myPending;
+            const hasPlaytomicBooking = hasBookingDuringShift(dateKey, displayEntry?.start_time || formatShiftTime(hour, duration).split(' ')[0], displayEntry?.end_time || formatShiftTime(hour, duration).split('–')[1]?.split(' ')[0], playtomicBookings);
+
             return (
-              <div key={hour} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div key={hour} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+                {hasPlaytomicBooking && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 4,
+                    right: 4,
+                    width: '12px',
+                    height: '12px',
+                    borderRadius: '50%',
+                    background: '#00ff00',
+                    boxShadow: '0 0 8px rgba(0, 255, 0, 0.8), 0 0 12px rgba(0, 255, 0, 0.5)',
+                    animation: 'pulse 2s infinite',
+                    zIndex: 10,
+                  }} title="Playtomic booking scheduled" />
+                )}
                 <button
                   className={`shift-btn ${slotClass}${booking && booking.userId === user.id ? ' orange' : ''}${isPastSlot ? ' disabled' : ''}${isSelected ? ' selected' : ''}${darkMode ? ' dark-mode' : ''}`}
                   disabled={(booking && !isMine && !isAdmin) || (isPastSlot && !isAdmin) || orphaned}
