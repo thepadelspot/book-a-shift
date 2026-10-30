@@ -1,5 +1,7 @@
 // Playtomic API integration
 const PLAYTOMIC_BASE_URL = 'https://thirdparty.playtomic.io/api/v1';
+// CORS proxy for GitHub Pages deployment
+const CORS_PROXY = 'https://thingproxy.freeboard.io/fetch/';
 
 let cachedToken = null;
 let tokenExpiresAt = null;
@@ -8,6 +10,15 @@ let tokenExpiresAt = null;
 const PLAYTOMIC_CLIENT_ID = process.env.REACT_APP_PLAYTOMIC_CLIENT_ID;
 const PLAYTOMIC_SECRET = process.env.REACT_APP_PLAYTOMIC_SECRET;
 const PLAYTOMIC_TENANT_ID = process.env.REACT_APP_PLAYTOMIC_TENANT_ID;
+
+// Debug: Log whether credentials are loaded
+if (process.env.NODE_ENV === 'development') {
+  console.log('Playtomic config loaded:', {
+    clientId: PLAYTOMIC_CLIENT_ID ? '✓ set' : '✗ missing',
+    secret: PLAYTOMIC_SECRET ? '✓ set' : '✗ missing',
+    tenantId: PLAYTOMIC_TENANT_ID ? '✓ set' : '✗ missing',
+  });
+}
 
 /**
  * Get a valid access token from Playtomic, using cached token if still valid
@@ -24,7 +35,7 @@ export async function getPlaytomicToken() {
       return null;
     }
 
-    const response = await fetch(`${PLAYTOMIC_BASE_URL}/oauth/token`, {
+    const response = await fetch(`${CORS_PROXY}${PLAYTOMIC_BASE_URL}/oauth/token`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -61,15 +72,17 @@ export async function getPlaytomicToken() {
 export async function fetchPlaytomicBookings(startDate, endDate) {
   try {
     if (!PLAYTOMIC_TENANT_ID) {
-      console.warn('Playtomic tenant ID not configured');
+      console.warn('Playtomic: tenant ID not configured');
       return [];
     }
 
+    console.log('Playtomic: Fetching bookings for', { startDate, endDate });
     const token = await getPlaytomicToken();
     if (!token) {
-      console.warn('Could not obtain Playtomic token');
+      console.warn('Playtomic: Could not obtain token');
       return [];
     }
+    console.log('Playtomic: Token obtained successfully');
 
     const params = new URLSearchParams({
       tenant_id: PLAYTOMIC_TENANT_ID,
@@ -80,7 +93,7 @@ export async function fetchPlaytomicBookings(startDate, endDate) {
     });
 
     const response = await fetch(
-      `${PLAYTOMIC_BASE_URL}/bookings?${params}`,
+      `${CORS_PROXY}${PLAYTOMIC_BASE_URL}/bookings?${params}`,
       {
         method: 'GET',
         headers: {
@@ -91,14 +104,15 @@ export async function fetchPlaytomicBookings(startDate, endDate) {
     );
 
     if (!response.ok) {
-      console.error('Failed to fetch Playtomic bookings:', response.status);
+      console.error('Playtomic: API error', response.status, response.statusText);
       return [];
     }
 
     const bookings = await response.json();
+    console.log('Playtomic: Successfully fetched', bookings.length, 'bookings');
     return Array.isArray(bookings) ? bookings : [];
   } catch (error) {
-    console.error('Error fetching Playtomic bookings:', error);
+    console.error('Playtomic: Fetch error', error);
     return [];
   }
 }
