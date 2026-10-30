@@ -66,13 +66,82 @@ export async function requestShift({ user_id, date, start_time, end_time }) {
 }
 
 // Approve a pending request → status becomes 'booked'
+// Also automatically deny any conflicting requests for the same shift
 export async function approveBooking(booking_id) {
-  const { data, error } = await supabase
-    .from('bookings')
-    .update({ status: 'booked' })
-    .eq('id', booking_id);
-  if (error) throw error;
-  return data;
+  try {
+    // First, fetch the booking to get its date and time info
+    const { data: booking, error: fetchError } = await supabase
+      .from('bookings')
+      .select('date, start_time, end_time')
+      .eq('id', booking_id)
+      .single();
+
+    if (fetchError || !booking) throw fetchError;
+
+    // Update the approved booking
+    const { error: approveError } = await supabase
+      .from('bookings')
+      .update({ status: 'booked' })
+      .eq('id', booking_id);
+
+    if (approveError) throw approveError;
+
+    // Helper function to convert time string to minutes since midnight
+    const timeToMinutes = (timeStr) => {
+      const [h, m] = timeStr.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    // Helper function to check if two time ranges overlap
+    const timesOverlap = (start1, end1, start2, end2) => {
+      const s1 = timeToMinutes(start1);
+      const e1 = timeToMinutes(end1);
+      const s2 = timeToMinutes(start2);
+      const e2 = timeToMinutes(end2);
+
+      // Handle overnight shifts: if end < start, it crosses midnight
+      if (e1 < s1) {
+        // Overnight shift: overlaps if start2 >= s1 OR end2 >= e1 (relative to next day)
+        return s2 >= s1 || e2 > 0;
+      }
+      if (e2 < s2) {
+        // Other shift is overnight: overlaps if s1 < e2 OR e1 >= s2
+        return s1 < e2 || e1 >= s2;
+      }
+
+      // Normal case: ranges overlap if s1 < e2 and s2 < e1
+      return s1 < e2 && s2 < e1;
+    };
+
+    // Auto-deny any pending bookings that conflict with this shift (same date and overlapping times)
+    const { data: allPending, error: findError } = await supabase
+      .from('bookings')
+      .select('id, start_time, end_time')
+      .eq('date', booking.date)
+      .eq('status', 'pending')
+      .neq('id', booking_id);
+
+    if (findError) throw findError;
+
+    // Filter for actual conflicts
+    const conflicting = allPending?.filter(p =>
+      timesOverlap(booking.start_time, booking.end_time, p.start_time, p.end_time)
+    ) || [];
+
+    // Deny all conflicting bookings
+    if (conflicting && conflicting.length > 0) {
+      const { error: denyError } = await supabase
+        .from('bookings')
+        .update({ status: 'canceled', canceled_at: new Date().toISOString(), canceled_by_admin: true })
+        .in('id', conflicting.map(b => b.id));
+
+      if (denyError) throw denyError;
+    }
+
+    return { success: true };
+  } catch (error) {
+    throw error;
+  }
 }
 
 // Deny a pending request → mark canceled by admin so it doesn't count against user
@@ -83,6 +152,85 @@ export async function denyBooking(booking_id) {
     .eq('id', booking_id);
   if (error) throw error;
   return data;
+}
+
+// Handle check-in with late arrival adjustments
+export async function handleCheckIn(booking_id, checkInTime, latitude, longitude) {
+  try {
+    // Fetch the booking to get its details
+    const { data: booking, error: fetchError } = await supabase
+      .from('bookings')
+      .select('id, date, start_time, end_time, user_id')
+      .eq('id', booking_id)
+      .single();
+
+    if (fetchError || !booking) throw fetchError;
+
+    // Convert times to minutes for comparison
+    const timeToMinutes = (timeStr) => {
+      const [h, m] = timeStr.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    const minutesToTime = (minutes) => {
+      const h = String(Math.floor(minutes / 60)).padStart(2, '0');
+      const m = String(minutes % 60).padStart(2, '0');
+      return `${h}:${m}`;
+    };
+
+    const scheduledStartMinutes = timeToMinutes(booking.start_time);
+    const checkInMinutes = timeToMinutes(checkInTime);
+
+    let newStartTime = booking.start_time;
+    let updatesToMake = [
+      {
+        id: booking_id,
+        updates: {
+          checked_in_at: new Date().toISOString(),
+          checkin_latitude: latitude,
+          checkin_longitude: longitude,
+        }
+      }
+    ];
+
+    // Only adjust start time if checked in LATE (after scheduled start)
+    if (checkInMinutes > scheduledStartMinutes) {
+      newStartTime = checkInTime;
+      updatesToMake[0].updates.start_time = checkInTime;
+
+      // Find the person scheduled to end at this time and update their end time
+      const { data: previousShift, error: prevError } = await supabase
+        .from('bookings')
+        .select('id, end_time')
+        .eq('date', booking.date)
+        .eq('status', 'booked')
+        .neq('id', booking_id)
+        .order('end_time', { ascending: false })
+        .limit(1);
+
+      if (!prevError && previousShift && previousShift.length > 0) {
+        // Update the previous person's end time to match this person's check-in time
+        updatesToMake.push({
+          id: previousShift[0].id,
+          updates: { end_time: checkInTime }
+        });
+      }
+    }
+
+    // Apply all updates
+    for (const update of updatesToMake) {
+      const { error: updateError } = await supabase
+        .from('bookings')
+        .update(update.updates)
+        .eq('id', update.id);
+
+      if (updateError) throw updateError;
+    }
+
+    return { success: true, adjustedTime: newStartTime };
+  } catch (error) {
+    throw error;
+  }
 }
 
 // Fetch all pending requests (all users)

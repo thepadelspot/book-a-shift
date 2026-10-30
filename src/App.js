@@ -62,26 +62,27 @@ const AppContent = () => {
   if (window.location.hash.startsWith('#/reset')) {
     return <ResetPasswordPage />;
   }
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <div className="loading-container"><div className="loading-spinner"></div><div className="loading-text">Loading...</div></div>;
   if (!user) return <LoginPage darkMode={darkMode} />;
-  if (isAdminLoading) return <div>Loading...</div>;
+  if (isAdminLoading) return <div className="loading-container"><div className="loading-spinner"></div><div className="loading-text">Loading...</div></div>;
   return (
     <div className={`App${darkMode ? ' dark-mode' : ''}`}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.5rem' }}>
-        <img src={horizontalLogo} alt="Padel Spot Logo" style={{ height: '120px', marginBottom: '0.5rem' }} />
-        <button
-          className={`dark-mode-toggle${darkMode ? '' : ' light'}`}
-          onClick={() => setDarkMode(d => !d)}
-          aria-label="Toggle dark mode"
-          style={{ marginBottom: user?.firstName ? '0.5rem' : 0 }}
-        >
-          {darkMode ? '🌙' : '☀️'}
-        </button>
-        {(user?.firstName || user?.email) && (
-          <span style={{ fontSize: '1.1rem', fontWeight: 500 }}>
-            Hello {user?.firstName ? user.firstName : user.email}
-          </span>
-        )}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: '1.5rem', borderBottom: darkMode ? '1px solid #334155' : '1px solid #e5e7eb', marginBottom: '1.5rem' }}>
+        <img src={horizontalLogo} alt="Padel Spot Logo" style={{ height: '110px', marginBottom: '1rem', filter: darkMode ? 'brightness(1.1)' : 'none' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '0.5rem' }}>
+          <button
+            className={`dark-mode-toggle${darkMode ? '' : ' light'}`}
+            onClick={() => setDarkMode(d => !d)}
+            aria-label="Toggle dark mode"
+          >
+            {darkMode ? '🌙' : '☀️'}
+          </button>
+          {(user?.firstName || user?.email) && (
+            <span style={{ fontSize: '1.1rem', fontWeight: 600, color: darkMode ? '#f1f5f9' : '#111827' }}>
+              Hello, {user?.firstName ? user.firstName : user.email}
+            </span>
+          )}
+        </div>
       </div>
       <Navbar onNavigate={setPage} currentPage={page} darkMode={darkMode} isAdmin={isAdmin} />
       {page === 'book' && <BookPage user={user} darkMode={darkMode} />}

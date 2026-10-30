@@ -5,6 +5,7 @@ import { supabase } from './supabaseClient';
 import AdminClosedDays from './AdminClosedDays';
 import AdminUserStats from './AdminUserStats';
 import ConfirmModal from './ConfirmModal';
+import NextShiftPerson from './NextShiftPerson';
 import { buildShiftConfigMap, formatShiftTime, computeEndTime, decimalHourToTimeStr, startTimeToDecimal, isWithinCancellationCutoff, CANCELLATION_CUTOFF_MESSAGE } from './utils/shiftConfig';
 
 // Compute duration in hours from stored start_time / end_time strings (handles midnight crossing)
@@ -586,7 +587,7 @@ const BookPage = ({ user, darkMode }) => {
         darkMode={darkMode}
         infoOnly
       />
-      {loading ? <div>Loading...</div> : <Calendar year={year} month={month} renderDay={renderDay} darkMode={darkMode} />}
+      {loading ? <div className="loading-container"><div className="loading-spinner"></div><div className="loading-text">Loading shifts...</div></div> : <Calendar year={year} month={month} renderDay={renderDay} darkMode={darkMode} />}
       {isAdmin && selectedShifts.length > 0 && (
         <div style={{ margin: '16px 0', padding: '12px', border: '1px solid #2ecc40', borderRadius: 8, background: darkMode ? '#222' : '#f8fff8' }}>
           <div style={{ marginBottom: 8 }}>

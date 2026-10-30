@@ -45,6 +45,7 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
 
   const [hideAdmins, setHideAdmins] = useState(true);
   const ADMIN_FIRST_NAMES = ['adnan', 'haroon', 'emadul', 'taha', 'azeem'];
+  const FIRED_STAFF_NAMES = ['imaan', 'aminur'];
 
   // Fetch users and bookings for stats
   useEffect(() => {
@@ -310,7 +311,12 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
         </thead>
         <tbody>
           {users
-            .filter(u => !hideAdmins || !ADMIN_FIRST_NAMES.includes((u.firstName || '').toLowerCase()))
+            .filter(u => {
+              const firstName = (u.firstName || '').toLowerCase();
+              if (hideAdmins && ADMIN_FIRST_NAMES.includes(firstName)) return false;
+              if (FIRED_STAFF_NAMES.includes(firstName)) return false;
+              return true;
+            })
             .map(u => (
               <tr key={u.id}>
                 <td>{stats[u.id]?.name || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email}</td>
@@ -322,7 +328,12 @@ export default function AdminUserStats({ year, month, darkMode, isAdmin }) {
         </tbody>
         <tfoot>
           {(() => {
-            const visibleUsers = users.filter(u => !hideAdmins || !ADMIN_FIRST_NAMES.includes((u.firstName || '').toLowerCase()));
+            const visibleUsers = users.filter(u => {
+              const firstName = (u.firstName || '').toLowerCase();
+              if (hideAdmins && ADMIN_FIRST_NAMES.includes(firstName)) return false;
+              if (FIRED_STAFF_NAMES.includes(firstName)) return false;
+              return true;
+            });
             return (
               <tr style={{ fontWeight: 700, borderTop: '2px solid #888' }}>
                 <td>Total</td>

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from './supabaseClient';
 import { cancelShift } from './api';
 import ConfirmModal from './ConfirmModal';
+import CheckIn from './CheckIn';
+import NextShiftPerson from './NextShiftPerson';
 import { isWithinCancellationCutoff, CANCELLATION_CUTOFF_HOURS, CANCELLATION_CUTOFF_MESSAGE } from './utils/shiftConfig';
 
 function ordinal(n) {
@@ -182,6 +184,7 @@ export default function MyShifts({ user }) {
 
   // Build week groups from the visible (filtered) shift list
   const visibleShifts = shifts.filter(s => {
+    if (s.status === 'canceled' && s.canceled_by_admin) return false; // Hide denied shifts
     if (s.status === 'pending') return true; // always show pending requests
     if (hideCancelled && s.status === 'canceled') return false;
     if (hideCompleted && s.status === 'booked' && hasShiftEnded(s)) return false;
@@ -323,70 +326,34 @@ export default function MyShifts({ user }) {
                           ? (darkMode ? '#1a2e50' : '#eef5ff')
                           : (darkMode ? '#1e2128' : '#fff');
                       return (
-                        <div
-                          key={shift.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            padding: '0.55rem 0.8rem',
-                            background: rowBg,
-                            borderBottom: isLast ? 'none' : `1px solid ${darkMode ? '#2c2c2c' : '#eee'}`,
-                            opacity: shift.status === 'canceled' || shiftEnded ? 0.75 : 1,
-                            gap: '0.5rem',
-                          }}
-                        >
-                          <span style={{ fontWeight: 500, fontSize: '0.92rem', minWidth: 68 }}>
-                            {formatDayShort(shift.date)}
-                          </span>
-                          <span style={{ color: '#888', fontSize: '0.88rem', flex: 1 }}>
-                            {formatTimeHuman(shift.start_time)} – {formatTimeHuman(shift.end_time)}
-                          </span>
-                          <span style={{ minWidth: 76, textAlign: 'right' }}>
-                            {shift.status === 'canceled' && (
-                              <span style={{ color: '#c0392b', fontSize: '0.82rem', fontWeight: 500 }}>
-                                {shift.canceled_by_admin ? 'Denied' : 'Cancelled'}
-                              </span>
-                            )}
-                            {shift.status === 'booked' && shiftEnded && (
-                              <span style={{ color: darkMode ? '#5cb85c' : '#27ae60', fontSize: '0.82rem', fontWeight: 500 }}>Completed</span>
-                            )}
-                            {shift.status === 'booked' && !shiftEnded && isWithinCancellationCutoff(shift.date, shift.start_time) && (
-                              <button
-                                style={{
-                                  padding: '0.2rem 0.5rem',
-                                  borderRadius: 4,
-                                  border: '1px solid #aaa',
-                                  background: 'transparent',
-                                  color: darkMode ? '#aaa' : '#666',
-                                  fontSize: '0.75rem',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={() => setCutoffNoticeOpen(true)}
-                                title={CANCELLATION_CUTOFF_MESSAGE}
-                              >
-                                Can't cancel ⓘ
-                              </button>
-                            )}
-                            {shift.status === 'booked' && !shiftEnded && !isWithinCancellationCutoff(shift.date, shift.start_time) && (
-                              <button
-                                style={{
-                                  padding: '0.28rem 0.65rem',
-                                  borderRadius: 5,
-                                  border: 'none',
-                                  background: '#e74c3c',
-                                  color: '#fff',
-                                  fontWeight: 500,
-                                  fontSize: '0.82rem',
-                                  cursor: 'pointer',
-                                }}
-                                onClick={() => handleCancel(shift.id, formatDateHuman(shift.date))}
-                              >
-                                Cancel
-                              </button>
-                            )}
-                            {shift.status === 'pending' && (
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
-                                <span style={{ color: '#0055aa', fontSize: '0.82rem', fontWeight: 500 }}>Pending</span>
+                        <React.Fragment key={shift.id}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              padding: '0.55rem 0.8rem',
+                              background: rowBg,
+                              borderBottom: shift.status === 'booked' && !shiftEnded ? 'none' : (isLast ? 'none' : `1px solid ${darkMode ? '#2c2c2c' : '#eee'}`),
+                              opacity: shift.status === 'canceled' || shiftEnded ? 0.75 : 1,
+                              gap: '0.5rem',
+                            }}
+                          >
+                            <span style={{ fontWeight: 500, fontSize: '0.92rem', minWidth: 68 }}>
+                              {formatDayShort(shift.date)}
+                            </span>
+                            <span style={{ color: '#888', fontSize: '0.88rem', flex: 1 }}>
+                              {formatTimeHuman(shift.start_time)} – {formatTimeHuman(shift.end_time)}
+                            </span>
+                            <span style={{ minWidth: 76, textAlign: 'right' }}>
+                              {shift.status === 'canceled' && (
+                                <span style={{ color: '#c0392b', fontSize: '0.82rem', fontWeight: 500 }}>
+                                  {shift.canceled_by_admin ? 'Denied' : 'Cancelled'}
+                                </span>
+                              )}
+                              {shift.status === 'booked' && shiftEnded && (
+                                <span style={{ color: darkMode ? '#5cb85c' : '#27ae60', fontSize: '0.82rem', fontWeight: 500 }}>Completed</span>
+                              )}
+                              {shift.status === 'booked' && !shiftEnded && isWithinCancellationCutoff(shift.date, shift.start_time) && (
                                 <button
                                   style={{
                                     padding: '0.2rem 0.5rem',
@@ -397,15 +364,58 @@ export default function MyShifts({ user }) {
                                     fontSize: '0.75rem',
                                     cursor: 'pointer',
                                   }}
-                                  onClick={() => handleCancel(shift.id, formatDateHuman(shift.date))}
-                                  title="Withdraw this request"
+                                  onClick={() => setCutoffNoticeOpen(true)}
+                                  title={CANCELLATION_CUTOFF_MESSAGE}
                                 >
-                                  Withdraw
+                                  Can't cancel ⓘ
                                 </button>
-                              </span>
-                            )}
-                          </span>
-                        </div>
+                              )}
+                              {shift.status === 'booked' && !shiftEnded && !isWithinCancellationCutoff(shift.date, shift.start_time) && (
+                                <button
+                                  style={{
+                                    padding: '0.28rem 0.65rem',
+                                    borderRadius: 5,
+                                    border: 'none',
+                                    background: '#e74c3c',
+                                    color: '#fff',
+                                    fontWeight: 500,
+                                    fontSize: '0.82rem',
+                                    cursor: 'pointer',
+                                  }}
+                                  onClick={() => handleCancel(shift.id, formatDateHuman(shift.date))}
+                                >
+                                  Cancel
+                                </button>
+                              )}
+                              {shift.status === 'pending' && (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                                  <span style={{ color: '#0055aa', fontSize: '0.82rem', fontWeight: 500 }}>Pending</span>
+                                  <button
+                                    style={{
+                                      padding: '0.2rem 0.5rem',
+                                      borderRadius: 4,
+                                      border: '1px solid #aaa',
+                                      background: 'transparent',
+                                      color: darkMode ? '#aaa' : '#666',
+                                      fontSize: '0.75rem',
+                                      cursor: 'pointer',
+                                    }}
+                                    onClick={() => handleCancel(shift.id, formatDateHuman(shift.date))}
+                                    title="Withdraw this request"
+                                  >
+                                    Withdraw
+                                  </button>
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          {shift.status === 'booked' && !shiftEnded && (
+                            <div style={{ padding: '0.5rem 0.8rem', background: darkMode ? '#1a1a1a' : '#fafafa', borderBottom: isLast ? 'none' : `1px solid ${darkMode ? '#2c2c2c' : '#eee'}` }}>
+                              <CheckIn shift={shift} user={user} onCheckInComplete={loadShifts} darkMode={darkMode} />
+                              <NextShiftPerson shift={shift} darkMode={darkMode} />
+                            </div>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </div>
