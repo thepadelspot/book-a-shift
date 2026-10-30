@@ -41,6 +41,39 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
     setLoading(true);
     setError('');
     try {
+      // Check if current time is within shift times
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+
+      const [shiftStartH, shiftStartM] = (shift.start_time || '00:00').split(':').map(Number);
+      const shiftStartInMinutes = shiftStartH * 60 + shiftStartM;
+
+      const [shiftEndH, shiftEndM] = (shift.end_time || '00:00').split(':').map(Number);
+      const shiftEndInMinutes = shiftEndH * 60 + shiftEndM;
+
+      // Handle overnight shifts
+      let isWithinShiftTime = false;
+      if (shiftEndInMinutes < shiftStartInMinutes) {
+        // Overnight shift
+        isWithinShiftTime = currentTimeInMinutes >= shiftStartInMinutes || currentTimeInMinutes < shiftEndInMinutes;
+      } else {
+        // Regular shift
+        isWithinShiftTime = currentTimeInMinutes >= shiftStartInMinutes && currentTimeInMinutes < shiftEndInMinutes;
+      }
+
+      if (!isWithinShiftTime) {
+        const shiftStartStr = shift.start_time || '00:00';
+        const shiftEndStr = shift.end_time || '00:00';
+        setError(
+          `You can only check in between ${shiftStartStr} and ${shiftEndStr}. ` +
+          `Current time: ${String(currentHours).padStart(2, '0')}:${String(currentMinutes).padStart(2, '0')}`
+        );
+        setLoading(false);
+        return;
+      }
+
       if (!navigator.geolocation) {
         throw new Error('Geolocation not supported on this device');
       }
@@ -48,7 +81,7 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           try {
-            const { latitude, longitude, accuracy } = position.coords;
+            const { latitude, longitude } = position.coords;
 
             // Calculate distance from premises
             const distanceToVenue = calculateDistance(
@@ -124,7 +157,7 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
         🔍 Check in to start your shift
       </div>
       <p style={{ margin: '0.5rem 0', fontSize: '0.9rem' }}>
-        Must be within {PREMISES.radius}m of {PREMISES.name} to check in. Your location will be recorded. If you arrive late, both your start time and the previous person's end time will be automatically adjusted.
+        Must be within {PREMISES.radius}m of {PREMISES.name} to check in. Your location will be recorded.
       </p>
       {error && (
         <div style={{

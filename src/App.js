@@ -66,8 +66,8 @@ const AppContent = () => {
   if (!user) return <LoginPage darkMode={darkMode} />;
   if (isAdminLoading) return <div className="loading-container"><div className="loading-spinner"></div><div className="loading-text">Loading...</div></div>;
   return (
-    <div className={`App${darkMode ? ' dark-mode' : ''}`}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: '1.5rem', borderBottom: darkMode ? '1px solid #334155' : '1px solid #e5e7eb', marginBottom: '1.5rem' }}>
+    <div className={`App${darkMode ? ' dark-mode' : ''}`} style={{ minHeight: '100vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', paddingBottom: '1.5rem', borderBottom: darkMode ? '1px solid #333333' : '1px solid #e5e7eb', marginBottom: '1.5rem' }}>
         <img src={horizontalLogo} alt="Padel Spot Logo" style={{ height: '110px', marginBottom: '1rem', filter: darkMode ? 'brightness(1.1)' : 'none' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginBottom: '0.5rem' }}>
           <button
