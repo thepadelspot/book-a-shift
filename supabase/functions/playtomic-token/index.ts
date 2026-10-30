@@ -7,12 +7,23 @@
 // Deploy:
 //   supabase functions deploy playtomic-token --no-verify-jwt
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
 Deno.serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders })
+  }
+
   try {
     if (req.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'POST only' }), {
         status: 405,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
       })
     }
 
@@ -22,7 +33,7 @@ Deno.serve(async (req) => {
     if (!clientId || !secret) {
       return new Response(
         JSON.stringify({ error: 'Missing Playtomic credentials' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       )
     }
 
@@ -40,20 +51,20 @@ Deno.serve(async (req) => {
       console.error('Playtomic token error:', response.status, errorText)
       return new Response(
         JSON.stringify({ error: `Playtomic API error: ${response.status}` }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       )
     }
 
     const data = await response.json()
     return new Response(JSON.stringify(data), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
     })
   } catch (err) {
     console.error('playtomic-token error:', err)
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
     })
   }
 })

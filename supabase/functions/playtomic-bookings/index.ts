@@ -8,12 +8,23 @@
 // Deploy:
 //   supabase functions deploy playtomic-bookings --no-verify-jwt
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
 Deno.serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders })
+  }
+
   try {
     if (req.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'POST only' }), {
         status: 405,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
       })
     }
 
@@ -22,7 +33,7 @@ Deno.serve(async (req) => {
     if (!startDate || !endDate) {
       return new Response(
         JSON.stringify({ error: 'Missing startDate or endDate' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
+        { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       )
     }
 
@@ -33,7 +44,7 @@ Deno.serve(async (req) => {
     if (!clientId || !secret || !tenantId) {
       return new Response(
         JSON.stringify({ error: 'Missing Playtomic credentials' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       )
     }
 
@@ -51,7 +62,7 @@ Deno.serve(async (req) => {
       console.error('Failed to get Playtomic token:', tokenResponse.status)
       return new Response(
         JSON.stringify({ error: 'Failed to authenticate with Playtomic' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       )
     }
 
@@ -82,20 +93,20 @@ Deno.serve(async (req) => {
       console.error('Failed to fetch bookings:', bookingsResponse.status)
       return new Response(
         JSON.stringify({ error: `Bookings API error: ${bookingsResponse.status}` }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       )
     }
 
     const bookings = await bookingsResponse.json()
     return new Response(JSON.stringify(bookings), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
     })
   } catch (err) {
     console.error('playtomic-bookings error:', err)
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
     })
   }
 })
