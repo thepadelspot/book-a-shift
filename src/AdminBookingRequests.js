@@ -285,7 +285,9 @@ export default function AdminBookingRequests({ darkMode }) {
   const [autoAllocating, setAutoAllocating] = useState(false);
   const [allocationPreview, setAllocationPreview] = useState(null);
   const [hideAdmins, setHideAdmins] = useState(true);
+  const [hideFiredStaff, setHideFiredStaff] = useState(true);
   const ADMIN_FIRST_NAMES = ['adnan', 'haroon', 'emadul', 'taha', 'azeem'];
+  const FIRED_STAFF_FIRST_NAMES = ['imaan', 'aminur'];
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -400,9 +402,12 @@ export default function AdminBookingRequests({ darkMode }) {
   const userMap = {};
   users.forEach(u => { userMap[u.id] = u; });
 
-  const visibleUsers = users.filter(u =>
-    !hideAdmins || !ADMIN_FIRST_NAMES.includes((u.firstName || '').toLowerCase())
-  );
+  const visibleUsers = users.filter(u => {
+    const firstName = (u.firstName || '').toLowerCase();
+    if (hideAdmins && ADMIN_FIRST_NAMES.includes(firstName)) return false;
+    if (hideFiredStaff && FIRED_STAFF_FIRST_NAMES.includes(firstName)) return false;
+    return true;
+  });
 
   const border = darkMode ? '#333' : '#dde';
   const cardBg = darkMode ? '#1e2128' : '#fff';
@@ -452,10 +457,16 @@ export default function AdminBookingRequests({ darkMode }) {
       <div style={{ border: `1px solid ${border}`, borderRadius: 10, marginBottom: 24, overflow: 'hidden' }}>
         <div style={{ background: headerBg, padding: '0.65rem 1rem', fontWeight: 600, fontSize: '0.95rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>User Weights &amp; Allocation Preview</span>
-          <label style={{ fontWeight: 400, fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none', color: subText }}>
-            <input type="checkbox" checked={hideAdmins} onChange={e => setHideAdmins(e.target.checked)} style={{ marginRight: 5 }} />
-            Hide admins
-          </label>
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <label style={{ fontWeight: 400, fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none', color: subText }}>
+              <input type="checkbox" checked={hideAdmins} onChange={e => setHideAdmins(e.target.checked)} style={{ marginRight: 5 }} />
+              Hide admins
+            </label>
+            <label style={{ fontWeight: 400, fontSize: '0.85rem', cursor: 'pointer', userSelect: 'none', color: subText }}>
+              <input type="checkbox" checked={hideFiredStaff} onChange={e => setHideFiredStaff(e.target.checked)} style={{ marginRight: 5 }} />
+              Hide fired staff
+            </label>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px 80px 100px', gap: 0, background: darkMode ? '#252930' : '#fafbff', padding: '0.4rem 1rem', fontSize: '0.8rem', color: subText, fontWeight: 600, borderBottom: `1px solid ${border}` }}>
