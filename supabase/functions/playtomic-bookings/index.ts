@@ -69,36 +69,58 @@ Deno.serve(async (req) => {
     const tokenData = await tokenResponse.json()
     const token = tokenData.token
 
-    // Fetch bookings with token
-    const params = new URLSearchParams({
-      tenant_id: tenantId,
-      start_booking_date: startDate,
-      end_booking_date: endDate,
-      page: '0',
-      size: '100',
-    })
+    // Fetch all bookings with pagination
+    const allBookings: Record<string, unknown>[] = []
+    let page = 0
+    let hasMore = true
 
-    const bookingsResponse = await fetch(
-      `https://thirdparty.playtomic.io/api/v1/bookings?${params}`,
-      {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      }
-    )
+    while (hasMore) {
+      const params = new URLSearchParams({
+        tenant_id: tenantId,
+        start_booking_date: startDate,
+        end_booking_date: endDate,
+        page: String(page),
+        size: '100',
+      })
 
-    if (!bookingsResponse.ok) {
-      console.error('Failed to fetch bookings:', bookingsResponse.status)
-      return new Response(
-        JSON.stringify({ error: `Bookings API error: ${bookingsResponse.status}` }),
-        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      const bookingsResponse = await fetch(
+        `https://thirdparty.playtomic.io/api/v1/bookings?${params}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }
       )
+
+      if (!bookingsResponse.ok) {
+        console.error('Failed to fetch bookings:', bookingsResponse.status)
+        return new Response(
+          JSON.stringify({ error: `Bookings API error: ${bookingsResponse.status}` }),
+          { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        )
+      }
+
+      const pageData = await bookingsResponse.json()
+
+      if (Array.isArray(pageData)) {
+        allBookings.push(...pageData)
+        // If we got fewer than 100, we've reached the last page
+        hasMore = pageData.length === 100
+      } else if (pageData && Array.isArray(pageData.data)) {
+        // Handle case where response is wrapped in object with 'data' property
+        allBookings.push(...pageData.data)
+        hasMore = pageData.data.length === 100
+      } else {
+        // Assume we got all data
+        hasMore = false
+      }
+
+      page++
     }
 
-    const bookings = await bookingsResponse.json()
-    return new Response(JSON.stringify(bookings), {
+    return new Response(JSON.stringify(allBookings), {
       status: 200,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
     })
