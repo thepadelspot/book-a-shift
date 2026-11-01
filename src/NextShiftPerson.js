@@ -26,12 +26,14 @@ function NextShiftPerson({ shift, darkMode }) {
 
         if (nextShifts && nextShifts.length > 0) {
           const next = nextShifts[0];
-          const name = next.users
-            ? `${next.users.firstName || ''} ${next.users.lastName || ''}`.trim()
-            : next.users?.email || 'Unknown';
+          // Handle both 'users' and 'user' relationship names
+          const userData = next.users || next.user;
+          const name = userData
+            ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || userData.email
+            : 'Unknown';
           setNextPerson({
             name,
-            email: next.users?.email,
+            email: userData?.email,
             startTime: next.start_time,
           });
         }

@@ -381,11 +381,11 @@ const BookPage = ({ user, darkMode }) => {
                 )}
                 <button
                   className={`shift-btn ${slotClass}${booking && booking.userId === user.id ? ' orange' : ''}${isPastSlot ? ' disabled' : ''}${isSelected ? ' selected' : ''}${darkMode ? ' dark-mode' : ''}`}
-                  disabled={(booking && !isMine && !isAdmin) || (isPastSlot && !isAdmin) || orphaned}
+                  disabled={(booking && !isMine && !isAdmin) || (isPastSlot && !isAdmin) || (orphaned && !isAdmin)}
                   onClick={() => {
                     if (booking) { if (canCancel) handleCancelClick(dateKey, hour, duration); }
                     else if (myPending) { handleCancelClick(dateKey, hour, duration); }
-                    else if (!orphaned) { handleBook(dateKey, hour, duration); }
+                    else if (!orphaned || isAdmin) { handleBook(dateKey, hour, duration); }
                   }}
                   style={isSelected ? { border: '2px solid #2ecc40', boxShadow: '0 0 6px #2ecc40' } : orphaned ? { opacity: 0.6, fontStyle: 'italic' } : {}}
                   title={orphaned ? 'Slot removed from schedule — existing booking still shown' : myPending ? 'Request pending admin approval' : undefined}
@@ -395,7 +395,10 @@ const BookPage = ({ user, darkMode }) => {
                     : formatShiftTime(hour, duration).replace(' (next day)', '')}
                 </button>
                 {bookedBy && isAdmin && (
-                  <span style={{ fontSize: '0.92em', color: '#888', marginTop: 2 }}>Booked by: {bookedBy}</span>
+                  <span style={{ fontSize: '0.92em', color: '#888', marginTop: 2, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    Booked by: {bookedBy}
+                    {booking?.checked_in_at && <span style={{ color: '#00ff00', fontWeight: 'bold' }}>✓</span>}
+                  </span>
                 )}
                 {(allPendingRequests[dateKey]?.[hour] || 0) > 0 && (
                   <span style={{ fontSize: '0.78em', color: '#c47d00', marginTop: 2 }}>
