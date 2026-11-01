@@ -166,6 +166,17 @@ export async function handleCheckIn(booking_id, checkInTime, latitude, longitude
 
     if (fetchError || !booking) throw fetchError;
 
+    // Find all consecutive shifts for this user on this date
+    const { data: userShiftsOnDate, error: shiftsError } = await supabase
+      .from('bookings')
+      .select('id, start_time, end_time')
+      .eq('date', booking.date)
+      .eq('user_id', booking.user_id)
+      .eq('status', 'booked')
+      .order('start_time', { ascending: true });
+
+    if (shiftsError) throw shiftsError;
+
     // Convert times to minutes for comparison
     const timeToMinutes = (timeStr) => {
       const [h, m] = timeStr.split(':').map(Number);
@@ -180,40 +191,73 @@ export async function handleCheckIn(booking_id, checkInTime, latitude, longitude
 
     const scheduledStartMinutes = timeToMinutes(booking.start_time);
     const checkInMinutes = timeToMinutes(checkInTime);
+    const now = new Date();
+    const checkedInTime = now.toISOString();
+
+    // Find all consecutive shifts starting from this one
+    const consecutiveShifts = [booking.id];
+    for (let i = 0; i < userShiftsOnDate.length; i++) {
+      if (userShiftsOnDate[i].id === booking.id) {
+        // Find all shifts that follow consecutively
+        for (let j = i + 1; j < userShiftsOnDate.length; j++) {
+          const currentShift = userShiftsOnDate[j - 1];
+          const nextShift = userShiftsOnDate[j];
+          // Check if shifts are back-to-back (next shift starts when current ends)
+          if (timeToMinutes(nextShift.start_time) === timeToMinutes(currentShift.end_time)) {
+            consecutiveShifts.push(nextShift.id);
+          } else {
+            break;
+          }
+        }
+        break;
+      }
+    }
 
     let newStartTime = booking.start_time;
-    let updatesToMake = [
-      {
-        id: booking_id,
-        updates: {
-          checked_in_at: new Date().toISOString(),
-          checkin_latitude: latitude,
-          checkin_longitude: longitude,
-        }
+    let updatesToMake = consecutiveShifts.map(shiftId => ({
+      id: shiftId,
+      updates: {
+        checked_in_at: checkedInTime,
+        checkin_latitude: latitude,
+        checkin_longitude: longitude,
       }
-    ];
+    }));
 
     // Only adjust start time if checked in LATE (after scheduled start)
     if (checkInMinutes > scheduledStartMinutes) {
       newStartTime = checkInTime;
       updatesToMake[0].updates.start_time = checkInTime;
 
-      // Find the person scheduled to end at this time and update their end time
-      const { data: previousShift, error: prevError } = await supabase
+      // Find the shift that ends right when this shift starts (the immediately preceding shift)
+      const { data: allShifts, error: allError } = await supabase
         .from('bookings')
-        .select('id, end_time')
+        .select('id, start_time, end_time')
         .eq('date', booking.date)
         .eq('status', 'booked')
-        .neq('id', booking_id)
-        .order('end_time', { ascending: false })
-        .limit(1);
+        .neq('id', booking_id);
 
-      if (!prevError && previousShift && previousShift.length > 0) {
-        // Update the previous person's end time to match this person's check-in time
-        updatesToMake.push({
-          id: previousShift[0].id,
-          updates: { end_time: checkInTime }
-        });
+      if (!allError && allShifts && allShifts.length > 0) {
+        // Find the shift that ends closest to (but not after) this shift's scheduled start time
+        const precedingShift = allShifts.reduce((best, shift) => {
+          const shiftEndMinutes = timeToMinutes(shift.end_time);
+          const scheduledStart = timeToMinutes(booking.start_time);
+
+          // Only consider shifts that end at or before this shift's scheduled start
+          if (shiftEndMinutes <= scheduledStart) {
+            if (!best || shiftEndMinutes > timeToMinutes(best.end_time)) {
+              return shift;
+            }
+          }
+          return best;
+        }, null);
+
+        if (precedingShift) {
+          // Update the preceding shift's end time to match this person's check-in time
+          updatesToMake.push({
+            id: precedingShift.id,
+            updates: { end_time: checkInTime }
+          });
+        }
       }
     }
 

@@ -37,7 +37,7 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
     }
   }, [shift]);
 
-  // Check if shift has started
+  // Check if check-in is available (5 minutes before shift starts)
   const now = new Date();
   const currentHours = now.getHours();
   const currentMinutes = now.getMinutes();
@@ -46,13 +46,14 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
   const [shiftStartH, shiftStartM] = (shift?.start_time || '00:00').split(':').map(Number);
   const shiftStartInMinutes = shiftStartH * 60 + shiftStartM;
 
-  const shiftHasStarted = currentTimeInMinutes >= shiftStartInMinutes;
+  const checkInAvailableAt = shiftStartInMinutes - 5;
+  const checkInAvailable = currentTimeInMinutes >= checkInAvailableAt;
 
   const handleCheckIn = async () => {
     setLoading(true);
     setError('');
     try {
-      // Check if current time is within shift times
+      // Check if current time is within check-in window (5 min before to end of shift)
       const now = new Date();
       const currentHours = now.getHours();
       const currentMinutes = now.getMinutes();
@@ -64,22 +65,25 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
       const [shiftEndH, shiftEndM] = (shift.end_time || '00:00').split(':').map(Number);
       const shiftEndInMinutes = shiftEndH * 60 + shiftEndM;
 
+      const checkInWindow = shiftStartInMinutes - 5;
+
       // Handle overnight shifts
-      let isWithinShiftTime = false;
+      let isWithinCheckInWindow = false;
       if (shiftEndInMinutes < shiftStartInMinutes) {
-        // Overnight shift
-        isWithinShiftTime = currentTimeInMinutes >= shiftStartInMinutes || currentTimeInMinutes < shiftEndInMinutes;
+        // Overnight shift - check in 5 min before start until end
+        isWithinCheckInWindow = (currentTimeInMinutes >= checkInWindow && currentTimeInMinutes < 1440) ||
+                                (currentTimeInMinutes >= 0 && currentTimeInMinutes < shiftEndInMinutes);
       } else {
-        // Regular shift
-        isWithinShiftTime = currentTimeInMinutes >= shiftStartInMinutes && currentTimeInMinutes < shiftEndInMinutes;
+        // Regular shift - check in 5 min before start until end
+        isWithinCheckInWindow = currentTimeInMinutes >= checkInWindow && currentTimeInMinutes < shiftEndInMinutes;
       }
 
-      if (!isWithinShiftTime) {
+      if (!isWithinCheckInWindow) {
         const shiftStartStr = shift.start_time || '00:00';
         const shiftEndStr = shift.end_time || '00:00';
         setError(
-          `You can only check in between ${shiftStartStr} and ${shiftEndStr}. ` +
-          `Current time: ${String(currentHours).padStart(2, '0')}:${String(currentMinutes).padStart(2, '0')}`
+          `Check-in available 5 min before your shift starts. ` +
+          `Shift: ${shiftStartStr} – ${shiftEndStr}`
         );
         setLoading(false);
         return;
@@ -155,8 +159,8 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
     );
   }
 
-  // Hide check-in if shift hasn't started yet
-  if (!shiftHasStarted) {
+  // Hide check-in if not yet in check-in window
+  if (!checkInAvailable) {
     return (
       <div style={{
         padding: '1rem',
@@ -167,7 +171,14 @@ function CheckIn({ shift, user, onCheckInComplete, darkMode }) {
         color: darkMode ? '#8899bb' : '#6b7280',
         fontSize: '0.9rem',
       }}>
-        ⏰ Check-in available at {shift?.start_time || '00:00'}
+        ⏰ Check-in available at {shift?.start_time ? (
+          (() => {
+            const [h, m] = (shift.start_time).split(':').map(Number);
+            const checkInH = h + Math.floor((m - 5) / 60);
+            const checkInM = (m - 5 + 60) % 60;
+            return `${String(checkInH).padStart(2, '0')}:${String(checkInM).padStart(2, '0')}`;
+          })()
+        ) : '00:00'}
       </div>
     );
   }
